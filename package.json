@@ -1,6 +1,6 @@
 {
   "name": "kodemux",
-  "version": "0.4.1",
+  "version": "0.4.2",
   "description": "Repo-native middleware & guardrail engine for AI coding tools — routes prompts to the optimal model/effort/mode and enforces git-level guardrails.",
   "type": "module",
   "license": "MIT",
@@ -32,6 +32,7 @@
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "node --import tsx --test \"test/**/*.test.ts\"",
+    "prepare": "npm run build",
     "prepublishOnly": "npm run build"
   },
   "dependencies": {

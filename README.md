@@ -32,31 +32,53 @@ overridable**, and wraps every change in secrets / branch / test guardrails.
 
 ## Install
 
-**npm (once published):**
+**Install straight from GitHub (recommended)** — one command, builds itself,
+works on macOS / Linux / Windows and inside the Claude Code terminal. Requires
+**Node ≥ 20**:
 
 ```sh
-npm install -g kodemux
-# or, no install:
-npx kodemux --help
+npm install -g github:vibhusharma101/kodemux
+kodemux --version
 ```
 
-**Curl installer (installs from source):**
+That clones the repo, compiles it (via the `prepare` script), and puts a global
+`kodemux` command on your PATH. Update later with the same command; remove with
+`npm rm -g kodemux`.
+
+**From npm (once published):**
+
+```sh
+npm install -g kodemux      # or: npx kodemux --help
+```
+
+**Curl installer (source, no npm global):**
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/vibhusharma101/kodemux/main/install.sh | sh
 ```
 
-The installer clones the repo to `~/.kodemux-src`, builds it, and links the
-`kodemux` binary into `~/.local/bin` (override with `KODEMUX_BIN`). Requires
-**Node ≥ 20** and **git**.
+Clones to `~/.kodemux-src`, builds, and links the binary into `~/.local/bin`
+(override with `KODEMUX_BIN`). Requires Node ≥ 20 and git.
 
-**From source:**
+**From source (development):**
 
 ```sh
 git clone https://github.com/vibhusharma101/kodemux.git
-cd kodemux && npm install && npm run build
+cd kodemux && npm install    # `prepare` builds dist/ automatically
 node dist/cli.js --help
 ```
+
+### Credentials (only needed for AI-assist)
+
+Deterministic routing, guardrails, and everything else work with **no credentials
+at all**. The optional AI-assist step (§ Routing, step 5) reuses whatever Anthropic
+credentials the SDK can already resolve — an **`ANTHROPIC_API_KEY`** environment
+variable, or an **`ant auth login`** session. Running kodemux inside the Claude
+Code terminal: if you launched Claude Code with `ANTHROPIC_API_KEY` set, kodemux
+subprocesses inherit it automatically; if you use OAuth/subscription login, run
+`ant auth login` once (or export a key) so kodemux can authenticate. When no
+credential is found, AI-assist simply skips and prints the reason — routing still
+works.
 
 ---
 
