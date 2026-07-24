@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * codemux CLI entry point.
+ * kodemux CLI entry point.
  */
 import { createRequire } from 'node:module';
 import { Command } from 'commander';
@@ -16,13 +16,13 @@ const pkg = require('../package.json') as { version: string };
 const program = new Command();
 
 program
-  .name('codemux')
+  .name('kodemux')
   .description('Repo-native middleware & guardrail engine for AI coding tools')
   .version(pkg.version, '-v, --version');
 
 program
   .command('init')
-  .description('Detect the repo stack and scaffold .codemux/')
+  .description('Detect the repo stack and scaffold .kodemux/')
   .option('-f, --force', 'overwrite an existing config', false)
   .action((opts: { force: boolean }) => {
     const result = init(process.cwd(), { force: opts.force });
@@ -32,7 +32,7 @@ program
     console.log(`Detected stack: ${stack}`);
     for (const f of result.created) console.log(`  created  ${f}`);
     for (const f of result.skipped) console.log(`  skipped  ${f}`);
-    console.log('\nEdit .codemux/config.json to override routing or hooks.');
+    console.log('\nEdit .kodemux/config.json to override routing or hooks.');
   });
 
 program
@@ -88,6 +88,6 @@ program
 
 program.parseAsync(process.argv).catch((err: unknown) => {
   const msg = err instanceof Error ? err.message : String(err);
-  console.error(`codemux: ${msg}`);
+  console.error(`kodemux: ${msg}`);
   process.exitCode = 1;
 });

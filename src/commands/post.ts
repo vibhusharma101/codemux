@@ -1,5 +1,5 @@
 /**
- * `codemux post` — post-hook runner. Plans (and optionally runs) scoped
+ * `kodemux post` — post-hook runner. Plans (and optionally runs) scoped
  * formatters, linters, and tests for the changed files.
  */
 import { execSync } from 'node:child_process';
@@ -37,7 +37,7 @@ export function runPost(cwd: string, opts: PostOptions = {}): PostOutput {
 
   if (steps.length === 0) {
     return {
-      text: 'codemux post: no formatter/lint/test steps for the changed files.',
+      text: 'kodemux post: no formatter/lint/test steps for the changed files.',
       exitCode: 0,
       steps,
     };
@@ -45,7 +45,7 @@ export function runPost(cwd: string, opts: PostOptions = {}): PostOutput {
 
   if (!opts.run) {
     const lines = [
-      `codemux post: ${steps.length} step(s) planned (dry-run — pass --run to execute):`,
+      `kodemux post: ${steps.length} step(s) planned (dry-run — pass --run to execute):`,
       ...steps.map((s) => `  [${s.kind}] ${s.command}`),
     ];
     return { text: lines.join('\n'), exitCode: 0, steps };
@@ -66,7 +66,7 @@ export function runPost(cwd: string, opts: PostOptions = {}): PostOutput {
   }
   const header =
     failed === 0
-      ? `codemux post: ${steps.length} step(s) passed.`
-      : `codemux post: ${failed}/${steps.length} step(s) failed.`;
+      ? `kodemux post: ${steps.length} step(s) passed.`
+      : `kodemux post: ${failed}/${steps.length} step(s) failed.`;
   return { text: [header, ...results].join('\n'), exitCode: failed ? 1 : 0, steps };
 }

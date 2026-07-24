@@ -1,6 +1,6 @@
-# How codemux works internally
+# How kodemux works internally
 
-This document explains the internal design of codemux's router (and, briefly, its
+This document explains the internal design of kodemux's router (and, briefly, its
 guardrail hooks) — the part of the product that decides *which model, effort, and
 mode* to use for a given task. It assumes you've read the [README](../README.md)
 for the product pitch; this is the "how," not the "why buy it."
@@ -25,7 +25,7 @@ prompt
 └───────────────────┬───────────────────┘
                     ▼
 ┌───────────────────────────────────────┐
-│  route()               src/router.ts   │  applies POLICY from .codemux/config.json
+│  route()               src/router.ts   │  applies POLICY from .kodemux/config.json
 │  → RouteResult object                  │  + critical-path check on changed paths
 └───────────────────┬───────────────────┘
                     │ tier, model, effort, mode, parallelAgents, confidence, escalation
@@ -49,25 +49,25 @@ directly instead of deriving them.
 ## 2. Why not "ask an LLM which model to use"?
 
 A tempting design is: send the prompt to a cheap model and ask it to pick the
-right model for the *next* call. codemux deliberately doesn't do this by default,
+right model for the *next* call. kodemux deliberately doesn't do this by default,
 for reasons grounded in how production LLM routers are built (RouteLLM, and
 similar cost/quality routing systems):
 
 | Approach | Latency | Cost | Determinism |
 |---|---|---|---|
 | LLM-as-judge router | +1–5s per prompt | an extra model call, every time | non-reproducible — same prompt can route differently twice |
-| **Rule-based router (codemux)** | ~1ms | free | fully deterministic, testable, and overridable |
+| **Rule-based router (kodemux)** | ~1ms | free | fully deterministic, testable, and overridable |
 
 The trade-off rule-based routing makes is that it can't *understand* a prompt the
 way an LLM can — it can only look at surface signals (keywords, scope, size). To
-compensate, codemux doesn't try to be right on the first guess and stop there. It
+compensate, kodemux doesn't try to be right on the first guess and stop there. It
 does two things a naive keyword-matcher doesn't:
 
 1. **Estimates a numeric complexity score from many signals**, not a single
    keyword→model lookup (see §4). This is closer to how real routers work: a
    lightweight classifier estimates difficulty, not intent-matching.
 2. **Ships a confidence score and an escalation recommendation** (§6). When the
-   signals are thin or contradictory, codemux says so explicitly — "escalate to
+   signals are thin or contradictory, kodemux says so explicitly — "escalate to
    Opus if this stalls" — instead of pretending to be sure.
 
 An LLM-judge fallback for genuinely ambiguous prompts is a documented future
@@ -170,7 +170,7 @@ router, not the score.
 ### 4.4 Reasons — every adjustment is logged
 
 Every point added or subtracted pushes a human-readable string onto `reasons`.
-This is what powers the `why:` section of `codemux route` output and the "why
+This is what powers the `why:` section of `kodemux route` output and the "why
 this route" panel in the web explainer — the estimate is never a black box.
 
 ### 4.5 Real repo context — `repoContext()` and critical paths
@@ -284,7 +284,7 @@ A heuristic 0–1 score, not a statistical one:
 ### 5.7 Escalation — the cascade
 
 If confidence is below `policy.escalateBelowConfidence` (default `0.6`) and the
-chosen tier isn't already the top of the ladder, codemux recommends — but does
+chosen tier isn't already the top of the ladder, kodemux recommends — but does
 not force — climbing one rung:
 
 ```json
@@ -301,7 +301,7 @@ to bail up a tier.
 
 ---
 
-## 6. Config overrides — `.codemux/config.json` (schema v2)
+## 6. Config overrides — `.kodemux/config.json` (schema v2)
 
 Everything in §3–§5 is a default in `defaultRouterPolicy()` (`src/config.ts`),
 and every field can be overridden per-repo:
@@ -331,13 +331,13 @@ other field falls back silently.
 Routing is the core, but three more commands wrap the same "pure function +
 thin CLI shell" pattern:
 
-- **`codemux scan`** (`src/scan.ts`) — regex-matches changed files against 7
+- **`kodemux scan`** (`src/scan.ts`) — regex-matches changed files against 7
   secret shapes (GitHub PAT, OpenAI key, AWS key, Slack token, Google API key,
   PEM private key), masks any match before printing it, exits 1 on a hit.
-- **`codemux guard`** (`src/commands/guard.ts`) — refuses to proceed if the
+- **`kodemux guard`** (`src/commands/guard.ts`) — refuses to proceed if the
   current branch is in the protected list (`main`, `master`, `production` by
   default).
-- **`codemux post`** (`src/hooks.ts`) — groups changed files by language and
+- **`kodemux post`** (`src/hooks.ts`) — groups changed files by language and
   plans `format` / `lint` / `test` steps; dry-run by default, `--run` executes.
 
 All three read `git status --porcelain` through a single parser

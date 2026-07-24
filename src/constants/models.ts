@@ -1,7 +1,7 @@
 /**
  * Central model / routing constants.
  *
- * codemux routes on a **capability ladder** rather than a fixed intent→model
+ * kodemux routes on a **capability ladder** rather than a fixed intent→model
  * table. Every model string lives here so a provider rename is a one-line
  * change. Ordered cheapest/fastest → most capable/expensive.
  *

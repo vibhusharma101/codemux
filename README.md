@@ -1,21 +1,21 @@
-# codemux
+# kodemux
 
 > Repo-native middleware & guardrail engine for AI coding tools.
 
-`codemux` sits between your prompts and your AI coding agent (Claude Code, Cursor,
+`kodemux` sits between your prompts and your AI coding agent (Claude Code, Cursor,
 custom agents). It auto-detects repo context, **routes** each task to the optimal
 model / effort / mode, and enforces **git-level guardrails** before and after code
 generation.
 
 ```
-[ prompt ] → codemux (classify + pre-hooks) → [ AI agent ] → codemux (post-hooks + guardrails) → [ commit ]
+[ prompt ] → kodemux (classify + pre-hooks) → [ AI agent ] → kodemux (post-hooks + guardrails) → [ commit ]
 ```
 
 Built as a dependency-light **Node + TypeScript** CLI. See [`PLAN.md`](./PLAN.md)
 for the full product spec and [`docs/INTERNALS.md`](./docs/INTERNALS.md) for how
 the router actually works under the hood.
 
-> 🌐 **[Try the interactive explainer →](https://vibhusharma101.github.io/codemux/)** —
+> 🌐 **[Try the interactive explainer →](https://vibhusharma101.github.io/kodemux/)** —
 > drive the real router, secrets scan, and branch guard in your browser. No install.
 
 ---
@@ -25,7 +25,7 @@ the router actually works under the hood.
 AI tools expose a large matrix of models (Fable 5, Opus 4.8, Sonnet 5, Haiku 4.5),
 effort levels (`low` → `xhigh`), and modes (single vs. multi-agent). Teams overspend
 on overkill models for trivial edits, underpower complex work, and lack a consistent
-guardrail layer. `codemux` makes the routing decision **explicit, repeatable, and
+guardrail layer. `kodemux` makes the routing decision **explicit, repeatable, and
 overridable**, and wraps every change in secrets / branch / test guardrails.
 
 ---
@@ -35,26 +35,26 @@ overridable**, and wraps every change in secrets / branch / test guardrails.
 **npm (once published):**
 
 ```sh
-npm install -g codemux
+npm install -g kodemux
 # or, no install:
-npx codemux --help
+npx kodemux --help
 ```
 
 **Curl installer (installs from source):**
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/vibhusharma101/codemux/main/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/vibhusharma101/kodemux/main/install.sh | sh
 ```
 
-The installer clones the repo to `~/.codemux-src`, builds it, and links the
-`codemux` binary into `~/.local/bin` (override with `CODEMUX_BIN`). Requires
+The installer clones the repo to `~/.kodemux-src`, builds it, and links the
+`kodemux` binary into `~/.local/bin` (override with `KODEMUX_BIN`). Requires
 **Node ≥ 20** and **git**.
 
 **From source:**
 
 ```sh
-git clone https://github.com/vibhusharma101/codemux.git
-cd codemux && npm install && npm run build
+git clone https://github.com/vibhusharma101/kodemux.git
+cd kodemux && npm install && npm run build
 node dist/cli.js --help
 ```
 
@@ -63,11 +63,11 @@ node dist/cli.js --help
 ## Quick start
 
 ```sh
-codemux init                              # detect stack, scaffold .codemux/
-codemux route "refactor the auth module"  # → model/effort/mode directives
-codemux guard                             # branch-protection check
-codemux scan                              # secrets scan of changed files
-codemux post                              # plan scoped format/lint/test
+kodemux init                              # detect stack, scaffold .kodemux/
+kodemux route "refactor the auth module"  # → model/effort/mode directives
+kodemux guard                             # branch-protection check
+kodemux scan                              # secrets scan of changed files
+kodemux post                              # plan scoped format/lint/test
 ```
 
 ---
@@ -76,15 +76,15 @@ codemux post                              # plan scoped format/lint/test
 
 | Command | Purpose |
 | --- | --- |
-| `codemux init [--force]` | Detect the repo stack and scaffold `.codemux/` (config + synthesized `CLAUDE.md`). |
-| `codemux route <prompt> [--files n] [--diff-lines n] [--base ref] [--no-git] [--json]` | Read git context, estimate complexity, pick a tier on the capability ladder, and emit `/model` · `/effort` · `/mode` (· `/agents N`) directives with a confidence + escalation. |
-| `codemux guard` | **Pre-hook.** Refuse direct edits on a protected branch. Exit 1 to block. |
-| `codemux scan [--json]` | **Pre-hook.** Scan changed files for secret-shaped strings. Exit 1 on a hit. |
-| `codemux post [--run] [--json]` | **Post-hook.** Plan (dry-run) or run scoped format/lint/test for changed files. |
+| `kodemux init [--force]` | Detect the repo stack and scaffold `.kodemux/` (config + synthesized `CLAUDE.md`). |
+| `kodemux route <prompt> [--files n] [--diff-lines n] [--base ref] [--no-git] [--json]` | Read git context, estimate complexity, pick a tier on the capability ladder, and emit `/model` · `/effort` · `/mode` (· `/agents N`) directives with a confidence + escalation. |
+| `kodemux guard` | **Pre-hook.** Refuse direct edits on a protected branch. Exit 1 to block. |
+| `kodemux scan [--json]` | **Pre-hook.** Scan changed files for secret-shaped strings. Exit 1 on a hit. |
+| `kodemux post [--run] [--json]` | **Post-hook.** Plan (dry-run) or run scoped format/lint/test for changed files. |
 
 ### Routing
 
-codemux routes on a **capability ladder** — it picks the cheapest model that can
+kodemux routes on a **capability ladder** — it picks the cheapest model that can
 handle the task, then floors upward for risk and escalates when unsure. This is a
 deterministic rule engine (no LLM call): free, instant, testable, reproducible.
 
@@ -123,7 +123,7 @@ deterministic rule engine (no LLM call): free, instant, testable, reproducible.
    stalls or the change proves larger than estimated") rather than guessing.
 
 ```sh
-$ codemux route "fix a typo in the README"
+$ kodemux route "fix a typo in the README"
 intent      docs
 complexity  0/14
 tier        simple
@@ -133,14 +133,14 @@ model       claude-haiku-4-5
 effort      n/a (model has no effort control)
 mode        single
 
-$ codemux route "refactor the entire architecture" --files 40 --diff-lines 1200
+$ kodemux route "refactor the entire architecture" --files 40 --diff-lines 1200
 tier        frontier          model  claude-fable-5   effort  max
 mode        multi-agent  (5 agents in parallel)   →  /agents 5
 ```
 
 `--json` emits the full decision (tier, complexity, risks, confidence, escalation,
 parallelAgents, directives) for use as middleware in an agent wrapper. Every tier,
-threshold, and floor is overridable in `.codemux/config.json`.
+threshold, and floor is overridable in `.kodemux/config.json`.
 
 > **Why rule-based, not an LLM judge?** Deterministic routing is the standard fast
 > path (cf. RouteLLM's lightweight routers, ~sub-second classifiers) — no latency,
@@ -152,7 +152,7 @@ threshold, and floor is overridable in `.codemux/config.json`.
 
 ## Configuration
 
-`codemux init` writes `.codemux/config.json`. Every field is optional — missing
+`kodemux init` writes `.kodemux/config.json`. Every field is optional — missing
 values fall back to defaults, so you can hand-edit a partial config.
 
 ```jsonc
@@ -185,14 +185,14 @@ your agent's PreToolUse hook:
 
 ```sh
 # .git/hooks/pre-commit
-codemux guard || exit 1
-codemux scan  || exit 1
+kodemux guard || exit 1
+kodemux scan  || exit 1
 ```
 
 Run `post` after a change to auto-format and test only what was touched:
 
 ```sh
-codemux post --run
+kodemux post --run
 ```
 
 Use `route --json` inside an agent wrapper to pick the model before dispatching.

@@ -1,5 +1,5 @@
 /**
- * `codemux guard` — pre-hook branch protection. Refuses direct edits on a
+ * `kodemux guard` — pre-hook branch protection. Refuses direct edits on a
  * protected branch so agents are forced onto feature branches.
  */
 import { currentBranch } from '../git.js';
@@ -27,13 +27,13 @@ export function runGuard(cwd: string, opts: GuardOptions = {}): GuardOutput {
   if (protectedBranches.includes(branch)) {
     return {
       text:
-        `codemux guard: refusing direct edits on protected branch '${branch}'.\n` +
+        `kodemux guard: refusing direct edits on protected branch '${branch}'.\n` +
         `Create a feature branch first (e.g. git checkout -b feat/your-change).`,
       exitCode: 1,
     };
   }
   return {
-    text: `codemux guard: branch '${branch}' is not protected — ok to proceed.`,
+    text: `kodemux guard: branch '${branch}' is not protected — ok to proceed.`,
     exitCode: 0,
   };
 }

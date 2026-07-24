@@ -1,5 +1,5 @@
 /**
- * `codemux init` — detect the repo stack and scaffold `.codemux/`.
+ * `kodemux init` — detect the repo stack and scaffold `.kodemux/`.
  */
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -8,7 +8,7 @@ import {
   CONFIG_DIR,
   configPath,
   defaultConfig,
-  type CodemuxConfig,
+  type KodemuxConfig,
 } from '../config.js';
 
 export interface InitOptions {
@@ -17,27 +17,27 @@ export interface InitOptions {
 }
 
 export interface InitResult {
-  config: CodemuxConfig;
+  config: KodemuxConfig;
   created: string[];
   skipped: string[];
 }
 
 /** Synthesized CLAUDE.md the agent can pick up in the consumer repo. */
-function claudeTemplate(config: CodemuxConfig): string {
+function claudeTemplate(config: KodemuxConfig): string {
   const stack = config.stack.length ? config.stack.join(', ') : 'unknown';
-  return `# Project routing (managed by codemux)
+  return `# Project routing (managed by kodemux)
 
 Detected stack: ${stack}
 
-Route tasks with \`codemux route "<your prompt>"\` and follow the emitted
-model / effort / mode directives. Guardrails run via \`codemux scan\` and
-\`codemux guard\`. Edit \`.codemux/config.json\` to override any routing row
+Route tasks with \`kodemux route "<your prompt>"\` and follow the emitted
+model / effort / mode directives. Guardrails run via \`kodemux scan\` and
+\`kodemux guard\`. Edit \`.kodemux/config.json\` to override any routing row
 or hook.
 `;
 }
 
 /**
- * Scaffold `.codemux/` at `cwd`. Idempotent unless `force` is set: an existing
+ * Scaffold `.kodemux/` at `cwd`. Idempotent unless `force` is set: an existing
  * config is left untouched and reported under `skipped`.
  */
 export function init(cwd: string, opts: InitOptions = {}): InitResult {

@@ -1,12 +1,12 @@
 {
-  "name": "codemux",
-  "version": "0.3.0",
+  "name": "kodemux",
+  "version": "0.3.1",
   "description": "Repo-native middleware & guardrail engine for AI coding tools — routes prompts to the optimal model/effort/mode and enforces git-level guardrails.",
   "type": "module",
   "license": "MIT",
   "author": "Vibhu Sharma",
   "bin": {
-    "codemux": "dist/cli.js"
+    "kodemux": "dist/cli.js"
   },
   "files": [
     "dist",
@@ -15,7 +15,7 @@
   ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/vibhusharma101/codemux.git"
+    "url": "git+https://github.com/vibhusharma101/kodemux.git"
   },
   "keywords": [
     "ai",
