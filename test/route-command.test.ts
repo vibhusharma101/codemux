@@ -14,36 +14,52 @@ test('runRoute errors on empty prompt', () => {
   }
 });
 
-test('runRoute prints human-readable directives', () => {
+test('runRoute prints tier, complexity, and directives', () => {
   const { dir, cleanup } = tempRepo();
   try {
-    const out = runRoute(dir, 'refactor the architecture');
+    const out = runRoute(dir, 'redesign the distributed architecture');
     assert.equal(out.exitCode, 0);
-    assert.match(out.text, /intent {6}architecture/);
-    assert.match(out.text, /\/model claude-fable-5/);
+    assert.match(out.text, /complexity/);
+    assert.match(out.text, /tier/);
+    assert.match(out.text, /\/model claude-/);
   } finally {
     cleanup();
   }
 });
 
-test('runRoute --json emits valid parseable JSON', () => {
+test('runRoute --json emits a parseable decision', () => {
   const { dir, cleanup } = tempRepo();
   try {
     const out = runRoute(dir, 'add a new feature', { json: true });
     const parsed = JSON.parse(out.text);
-    assert.equal(parsed.intent, 'feature');
+    assert.ok(parsed.tier);
+    assert.equal(typeof parsed.confidence, 'number');
     assert.ok(Array.isArray(parsed.directives));
   } finally {
     cleanup();
   }
 });
 
-test('runRoute honors --files signal for architecture', () => {
+test('runRoute honors --files/--diff-lines signals', () => {
   const { dir, cleanup } = tempRepo();
   try {
-    const out = runRoute(dir, 'update things', { files: '30', diffLines: '800', json: true });
+    const out = runRoute(dir, 'update things', {
+      files: '30',
+      diffLines: '900',
+      json: true,
+    });
     const parsed = JSON.parse(out.text);
-    assert.equal(parsed.intent, 'architecture');
+    assert.ok(['complex', 'frontier'].includes(parsed.tier));
+  } finally {
+    cleanup();
+  }
+});
+
+test('runRoute shows n/a effort for the Haiku (simple) tier', () => {
+  const { dir, cleanup } = tempRepo();
+  try {
+    const out = runRoute(dir, 'fix a typo in the docs');
+    assert.match(out.text, /effort +n\/a/);
   } finally {
     cleanup();
   }

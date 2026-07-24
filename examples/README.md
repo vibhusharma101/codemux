@@ -13,17 +13,19 @@ codemux init
 #   created  .codemux/config.json
 #   created  .codemux/CLAUDE.md
 
-# 3. Route some tasks — watch the model/effort/mode change with intent
+# 3. Route some tasks — watch the tier climb with estimated complexity
 codemux route "fix a typo in the README"
-#   intent docs      → claude-haiku-4-5 / low  / single
-codemux route "refactor the whole billing architecture"
-#   intent architecture → claude-fable-5 / xhigh / multi-agent
+#   simple   → claude-haiku-4-5  / (no effort) / single
 codemux route "add a CSV export endpoint"
-#   intent feature   → claude-sonnet-5 / high / plan   (+ /plan directive)
+#   standard → claude-sonnet-5   / medium / plan
+codemux route "audit the auth flow for vulnerabilities"
+#   complex  → claude-opus-4-8   / xhigh / read-only   [risk: security]
+codemux route "design a distributed rate limiter from scratch, optimize latency"
+#   frontier → claude-fable-5    / max   / plan
 
-# 4. Repo signals override keywords for big changes
-codemux route "touch a few things" --files 30 --diff-lines 900
-#   intent architecture (large change heuristic)
+# 4. Repo size feeds the complexity score (and can trigger parallel agents)
+codemux route "reorganize the app" --files 40 --diff-lines 1200
+#   frontier → claude-fable-5 / max / multi-agent  (→ /agents 5)
 
 # 5. Guardrails
 git checkout -b feat/export

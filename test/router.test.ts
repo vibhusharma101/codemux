@@ -4,39 +4,88 @@ import { route, directivesFor } from '../src/router.js';
 import { defaultConfig } from '../src/config.js';
 import { MODELS } from '../src/constants/models.js';
 
-test('routes a docs prompt to haiku/low/single', () => {
+test('a typo fix routes to the simple tier (Haiku, no effort)', () => {
   const r = route('fix a typo in the README');
+  assert.equal(r.tier, 'simple');
   assert.equal(r.target.model, MODELS.HAIKU_4_5);
-  assert.equal(r.target.effort, 'low');
-  assert.deepEqual(r.directives, [
-    '/model claude-haiku-4-5',
-    '/effort low',
-    '/mode single',
-  ]);
+  assert.equal(r.target.effort, null);
+  // no /effort directive for a model without effort control
+  assert.deepEqual(r.directives, ['/model claude-haiku-4-5', '/mode single']);
 });
 
-test('routes an architecture prompt to fable/xhigh/multi-agent', () => {
-  const r = route('massive refactor of the system architecture');
+test('a distributed-systems task routes to the frontier tier (Fable)', () => {
+  const r = route('design a distributed consensus protocol from scratch, optimize latency across the entire system');
+  assert.equal(r.tier, 'frontier');
   assert.equal(r.target.model, MODELS.FABLE_5);
-  assert.equal(r.target.effort, 'xhigh');
-  assert.ok(r.directives.includes('/mode multi-agent'));
+  assert.ok(['xhigh', 'max'].includes(r.target.effort as string));
 });
 
-test('feature prompt emits /plan directive', () => {
-  const r = route('implement a new export feature');
-  assert.equal(r.intent, 'feature');
+test('an everyday feature routes to the standard tier (Sonnet) with a plan', () => {
+  const r = route('add a CSV export endpoint');
+  assert.equal(r.tier, 'standard');
+  assert.equal(r.target.model, MODELS.SONNET_5);
   assert.ok(r.directives.includes('/plan'));
 });
 
-test('config router overrides are respected', () => {
-  const cfg = defaultConfig(['node']);
-  cfg.router.docs = { model: MODELS.SONNET_5, effort: 'medium', mode: 'single' };
-  const r = route('update the documentation', cfg);
-  assert.equal(r.target.model, MODELS.SONNET_5);
-  assert.equal(r.target.effort, 'medium');
+test('security work floors at the complex tier and audits are read-only', () => {
+  const r = route('run a security audit for OWASP vulnerabilities');
+  assert.ok(r.risks.includes('security'));
+  assert.equal(r.target.model, MODELS.OPUS_4_8); // risk floor = complex
+  assert.equal(r.target.mode, 'read-only');
 });
 
-test('directivesFor builds the three canonical directives', () => {
-  const d = directivesFor({ model: MODELS.SONNET_5, effort: 'high', mode: 'plan' });
-  assert.deepEqual(d, ['/model claude-sonnet-5', '/effort high', '/plan']);
+test('architecture intent floors at the complex tier', () => {
+  const r = route('redesign the module architecture');
+  assert.equal(r.tier, 'complex');
+  assert.equal(r.target.model, MODELS.OPUS_4_8);
+});
+
+test('low confidence produces an escalation recommendation', () => {
+  // conflicting/thin signal → not fully confident → cascade hint
+  const r = route('touch the concurrency thing but keep it a small rename');
+  assert.ok(r.confidence < 0.6);
+  assert.ok(r.escalation);
+  assert.notEqual(r.escalation!.model, r.target.model);
+});
+
+test('repo signals alone can push a vague prompt to a higher tier', () => {
+  const small = route('update things', undefined, { fileCount: 1, diffLines: 10 });
+  const large = route('update things', undefined, { fileCount: 30, diffLines: 900 });
+  assert.ok(
+    ['complex', 'frontier'].includes(large.tier),
+    `expected complex/frontier, got ${large.tier}`,
+  );
+  assert.notEqual(large.tier, small.tier);
+});
+
+test('config overrides are respected (tier model + thresholds)', () => {
+  const cfg = defaultConfig(['node']);
+  cfg.router.tiers.standard.model = MODELS.OPUS_4_8;
+  const r = route('add a small feature', cfg);
+  assert.equal(r.tier, 'standard');
+  assert.equal(r.target.model, MODELS.OPUS_4_8);
+});
+
+test('single-agent modes recommend exactly one agent', () => {
+  const r = route('fix a typo in the README');
+  assert.equal(r.parallelAgents, 1);
+  assert.ok(!r.directives.some((d) => d.startsWith('/agents')));
+});
+
+test('a large, wide-scope task fans out to multiple parallel agents', () => {
+  const r = route(
+    'refactor the entire codebase architecture across every module',
+    undefined,
+    { fileCount: 40, diffLines: 1200 },
+  );
+  assert.equal(r.target.mode, 'multi-agent');
+  assert.ok(r.parallelAgents >= 3, `expected >=3 agents, got ${r.parallelAgents}`);
+  assert.ok(r.directives.includes(`/agents ${r.parallelAgents}`));
+});
+
+test('directivesFor omits /effort when the model has none', () => {
+  const withEffort = directivesFor({ model: MODELS.SONNET_5, effort: 'high', mode: 'plan' });
+  assert.deepEqual(withEffort, ['/model claude-sonnet-5', '/effort high', '/plan']);
+  const noEffort = directivesFor({ model: MODELS.HAIKU_4_5, effort: null, mode: 'single' });
+  assert.deepEqual(noEffort, ['/model claude-haiku-4-5', '/mode single']);
 });
