@@ -16,7 +16,7 @@ import {
 
 export const CONFIG_DIR = '.kodemux';
 export const CONFIG_FILE = 'config.json';
-export const CONFIG_VERSION = 2;
+export const CONFIG_VERSION = 3;
 
 export interface TierPolicy {
   model: ModelId;
@@ -42,6 +42,14 @@ export interface RouterPolicy {
    * never mentions it.
    */
   criticalPaths: string[];
+  /**
+   * When the deterministic pass is unsure (confidence below
+   * `escalateBelowConfidence`), consult a cheap AI judge (Haiku) using
+   * whatever Anthropic credentials are already configured, before falling
+   * back to the deterministic escalation cascade. On by default; failures
+   * (no credentials, network, timeout) always fall back silently.
+   */
+  aiAssist: boolean;
 }
 
 export interface HookConfig {
@@ -74,6 +82,7 @@ export function defaultRouterPolicy(): RouterPolicy {
     thresholds: { standard: 2, complex: 5, frontier: 9 },
     riskFloor: 'complex',
     escalateBelowConfidence: 0.6,
+    aiAssist: true,
     criticalPaths: [
       '**/auth/**',
       '**/migrations/**',
@@ -137,6 +146,7 @@ export function loadConfig(cwd: string): KodemuxConfig | null {
       escalateBelowConfidence:
         pr.escalateBelowConfidence ?? base.router.escalateBelowConfidence,
       criticalPaths: pr.criticalPaths ?? base.router.criticalPaths,
+      aiAssist: pr.aiAssist ?? base.router.aiAssist,
     },
     hooks: {
       pre: { ...base.hooks.pre, ...(parsed.hooks?.pre ?? {}) },

@@ -1,6 +1,6 @@
 {
   "name": "kodemux",
-  "version": "0.3.1",
+  "version": "0.4.0",
   "description": "Repo-native middleware & guardrail engine for AI coding tools — routes prompts to the optimal model/effort/mode and enforces git-level guardrails.",
   "type": "module",
   "license": "MIT",
@@ -35,6 +35,7 @@
     "prepublishOnly": "npm run build"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.60.0",
     "commander": "^12.1.0"
   },
   "devDependencies": {

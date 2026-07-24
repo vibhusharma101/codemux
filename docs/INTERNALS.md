@@ -30,19 +30,36 @@ prompt
 └───────────────────┬───────────────────┘
                     │ tier, model, effort, mode, parallelAgents, confidence, escalation
                     ▼
+             confidence low?
+                    │
+          ┌─────────┴─────────┐
+          │ no                │ yes (and AI-assist enabled)
+          ▼                   ▼
+   use result as-is    ┌───────────────────────────┐
+                        │ judgeComplexity()          │  src/ai-judge.ts — ONE call to
+                        │ → JudgeOutcome              │  claude-haiku-4-5, reusing whatever
+                        └──────────────┬─────────────┘  Anthropic creds are already configured
+                                       ▼
+                        route(..., aiHint) — re-run the SAME pure function with the
+                        judge's complexity/risk merged in (can only raise, never lower)
+                    │
+                    ▼
 ┌───────────────────────────────────────┐
 │  runRoute() / CLI  src/commands/route.ts, src/cli.ts
-│  → text or --json                      │  reads git, then calls the pure core
-└───────────────────────────────────────┘
+│  → text or --json                      │  reads git, calls the pure core, optionally
+└───────────────────────────────────────┘  awaits the judge, never throws
 ```
 
-`analyze()` and `route()` are **pure functions** — same inputs, same output, no I/O.
-The *only* impurity is `repoContext()` (it shells out to `git`) and loading the
-config file, both confined to the CLI layer and both skippable (`--no-git`). That
-purity is what makes the 63-test suite exhaustive and lets the interactive web
-explainer (`docs/index.html`) run the *exact same routing logic* client-side with
-zero backend — it just can't run git, so it accepts the file/diff/path signals
-directly instead of deriving them.
+`analyze()` and `route()` are **pure, synchronous functions** — same inputs, same
+output, no I/O, no network, testable with plain assertions. The *only* impurity in
+the whole pipeline is `repoContext()` (shells out to `git`) and `judgeComplexity()`
+(one optional network call) — both confined to the CLI layer, both skippable
+(`--no-git`, `--no-ai`), and both fail-safe. That purity is what makes the 79-test
+suite exhaustive and lets the interactive web explainer (`docs/index.html`) run the
+*exact same deterministic routing logic* client-side with zero backend — it can't
+run git or call an AI judge, so it demonstrates the free, instant core that handles
+the large majority of prompts; AI-assist is a CLI-only enhancement layered on top
+for the ambiguous minority (see §5.8).
 
 ---
 
@@ -297,25 +314,93 @@ not force — climbing one rung:
 
 This is the deterministic router's answer to "what if I'm wrong": rather than
 silently picking a possibly-underpowered model, it tells the caller exactly when
-to bail up a tier.
+to bail up a tier. §5.8 below is the *other* answer — get a real opinion instead
+of just flagging the uncertainty.
+
+### 5.8 AI-assisted escalation — a cheap, optional second opinion
+
+The deterministic pass only sees surface signals: keywords, scope, file counts.
+It cannot tell a genuinely hard "add error handling" from an easy one the way an
+LLM reading the actual diff could. Rather than either (a) always paying for an
+LLM judge on every single call, or (b) never using one and accepting the blind
+spot, kodemux does the narrow, cheap version: **consult an LLM only when the
+deterministic pass is already unsure, and only with the cheapest model capable
+of the job.**
+
+**When it fires.** Only when `result.confidence < policy.escalateBelowConfidence`
+(same threshold that gates the escalation cascade in §5.7) **and** AI-assist is
+enabled (`policy.aiAssist`, default `true`; `--no-ai` / `router.aiAssist: false`
+disables it). For the large majority of prompts — the confident ones — this
+never runs, so there is no added cost or latency on the common path.
+
+**What it calls.** `judgeComplexity()` (`src/ai-judge.ts`) makes **one** request
+to `claude-haiku-4-5` — the cheapest model on the ladder is plenty capable of
+judging "how hard is this," the same way you wouldn't hire a surgeon to check
+for a paper cut. The request uses `output_config.format` (structured JSON output,
+no beta header) so the response is a validated `{ complexity, risks, rationale }`
+object, not free text to parse with regex.
+
+**Whose credentials it uses.** `new Anthropic()` with **no arguments** — the SDK
+resolves credentials itself from whatever is already configured on the machine
+(`ANTHROPIC_API_KEY`, or an `ant auth login` profile). This is the key design
+choice: no separate API key, no second account to set up. If you're already
+authenticated for Claude Code, the judge just works.
+
+**How the judge's opinion is used.** It is *never* allowed to pick the model
+directly, and it can only **raise** the deterministic complexity/risk — never
+lower them (see `route()`'s `aiHint` parameter in §5, `src/router.ts`):
+
+```ts
+const complexity = aiHint ? Math.max(a.complexity, aiHint.complexity) : a.complexity;
+// risks: union of deterministic risks + aiHint.risks (never removed)
+```
+
+This keeps the *final* decision function exactly as pure and testable as before
+— `route(prompt, config, signals, aiHint)` is still synchronous and
+deterministic *given* the hint; only the CLI layer (`runRoute` in
+`src/commands/route.ts`) is async, and only it ever calls the network. A
+successful consultation also resets confidence to a fixed `0.85` (the ambiguity
+that triggered it has now been resolved by an actual semantic read) and appends
+a `reasons` entry naming the rationale, so the "why" trace stays honest about
+where each number came from.
+
+**Failure is always silent and safe.** No credentials, a network error, a
+timeout (capped at 8s so the CLI never hangs), a model refusal, or a malformed
+response all resolve to `{ ok: false, reason }` inside `judgeWithClient()` —
+never a thrown exception. `runRoute` falls back to the plain deterministic
+result and (in text output) prints one line naming the reason, e.g.:
+
+```
+ai-assist   skipped (Could not resolve authentication method. Expected either
+            apiKey or authToken to be set...)
+```
+
+**Testability.** `judgeWithClient()` takes an already-constructed client as a
+parameter specifically so tests can inject a fake object (`{ messages: { create:
+async () => ... } }`) and never touch the network — see `test/ai-judge.test.ts`.
+`runRoute()` similarly accepts an optional `deps.judge` override so the full
+CLI-level orchestration (confident tasks skip it, ambiguous tasks call it,
+failures fall back cleanly) is tested with zero real API calls — see the
+injected-judge tests in `test/route-command.test.ts`.
 
 ---
 
-## 6. Config overrides — `.kodemux/config.json` (schema v2)
+## 6. Config overrides — `.kodemux/config.json` (schema v3)
 
 Everything in §3–§5 is a default in `defaultRouterPolicy()` (`src/config.ts`),
 and every field can be overridden per-repo:
 
 ```jsonc
 {
-  "version": 2,
+  "version": 3,
   "router": {
     "tiers": {
       "complex": { "model": "claude-opus-4-8", "efforts": ["high", "xhigh"] }
     },
     "thresholds": { "standard": 2, "complex": 5, "frontier": 9 },
     "riskFloor": "complex",
-    "escalateBelowConfidence": 0.6
+    "escalateBelowConfidence": 0.6,
+    "aiAssist": true
   }
 }
 ```
@@ -353,8 +438,9 @@ everywhere, instead of each command re-implementing it.
 | "Why did this prompt get this model?" | `src/classify.ts` (`analyze`) + `src/router.ts` (`route`) |
 | "How does it read the repo?" | `src/git.ts` (`repoContext`, `parseNumstat`) |
 | "How are critical paths matched?" | `src/glob.ts` + `router.criticalPaths` in `src/config.ts` |
+| "How does the AI-assist judge work?" | `src/ai-judge.ts` (`judgeComplexity`, `judgeWithClient`) + the `aiHint` param on `route()` in `src/router.ts` |
 | "What models/efforts exist?" | `src/constants/models.ts` |
 | "What can I override in config?" | `src/config.ts` |
 | "How does the CLI format the answer?" | `src/commands/route.ts` |
-| "Does the web page match the CLI exactly?" | `docs/index.html` — the `<script>` is a line-for-line port of the routing logic (it can't run git, so it takes the signals directly) |
-| "What's tested?" | `test/*.test.ts` — 63 tests across classify, router, config, glob, git, scan, guard, hooks, init |
+| "Does the web page match the CLI exactly?" | `docs/index.html` — the `<script>` is a line-for-line port of the deterministic routing logic (it can't run git or call an AI judge, so it demonstrates the free instant core — see §5.8) |
+| "What's tested?" | `test/*.test.ts` — 79 tests across classify, router, config, glob, git, scan, guard, hooks, init, ai-judge, and the route command's AI-assist orchestration |

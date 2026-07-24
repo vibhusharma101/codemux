@@ -77,7 +77,7 @@ kodemux post                              # plan scoped format/lint/test
 | Command | Purpose |
 | --- | --- |
 | `kodemux init [--force]` | Detect the repo stack and scaffold `.kodemux/` (config + synthesized `CLAUDE.md`). |
-| `kodemux route <prompt> [--files n] [--diff-lines n] [--base ref] [--no-git] [--json]` | Read git context, estimate complexity, pick a tier on the capability ladder, and emit `/model` · `/effort` · `/mode` (· `/agents N`) directives with a confidence + escalation. |
+| `kodemux route <prompt> [--files n] [--diff-lines n] [--base ref] [--no-git] [--no-ai] [--json]` | Read git context, estimate complexity, pick a tier on the capability ladder, and emit `/model` · `/effort` · `/mode` (· `/agents N`) directives with a confidence + escalation. Consults a cheap AI judge for low-confidence routes unless `--no-ai`. |
 | `kodemux guard` | **Pre-hook.** Refuse direct edits on a protected branch. Exit 1 to block. |
 | `kodemux scan [--json]` | **Pre-hook.** Scan changed files for secret-shaped strings. Exit 1 on a hit. |
 | `kodemux post [--run] [--json]` | **Post-hook.** Plan (dry-run) or run scoped format/lint/test for changed files. |
@@ -121,6 +121,16 @@ deterministic rule engine (no LLM call): free, instant, testable, reproducible.
 4. **Confidence & escalation** — a confidence score gates a **cascade**: when the
    router isn't sure, it recommends the next tier up ("escalate to X if the agent
    stalls or the change proves larger than estimated") rather than guessing.
+5. **AI-assisted escalation (optional, on by default)** — when confidence is low,
+   kodemux makes *one* cheap call to `claude-haiku-4-5` (reusing whatever
+   Anthropic credentials are already on the machine — an `ANTHROPIC_API_KEY` or an
+   `ant auth login` session, no separate setup) to get a real semantic read on the
+   task, instead of falling straight back on the plain deterministic guess. The
+   judge only ever *raises* the complexity/risk the deterministic pass found —
+   never lowers it — so the merged decision stays explainable. Any failure (no
+   credentials, network, timeout, refusal) falls back to the deterministic result
+   silently — the CLI never crashes, hangs, or blocks on it. Disable entirely with
+   `--no-ai` or `router.aiAssist: false` in config.
 
 ```sh
 $ kodemux route "fix a typo in the README"
@@ -157,7 +167,7 @@ values fall back to defaults, so you can hand-edit a partial config.
 
 ```jsonc
 {
-  "version": 2,
+  "version": 3,
   "stack": ["node", "typescript"],
   "router": {
     "tiers": {
@@ -166,8 +176,9 @@ values fall back to defaults, so you can hand-edit a partial config.
     },
     "thresholds": { "standard": 2, "complex": 5, "frontier": 9 },
     "riskFloor": "complex",           // min tier when any risk flag is present
-    "escalateBelowConfidence": 0.6,   // cascade to the next tier below this confidence
-    "criticalPaths": ["**/auth/**", "**/migrations/**", "infra/**", ".env*"]
+    "escalateBelowConfidence": 0.6,   // cascade / consult the AI judge below this confidence
+    "criticalPaths": ["**/auth/**", "**/migrations/**", "infra/**", ".env*"],
+    "aiAssist": true                 // set false to disable the AI-judge escalation entirely
   },
   "hooks": {
     "pre":  { "secretsScan": true, "branchProtection": ["main", "master", "production"] },

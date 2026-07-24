@@ -43,13 +43,21 @@ program
   .option('--diff-lines <n>', 'override auto-detected diff size')
   .option('--base <ref>', 'diff against a base ref (e.g. main) instead of the working tree')
   .option('--no-git', 'disable automatic git context detection')
+  .option('--no-ai', 'disable AI-assisted escalation for low-confidence routes')
   .option('--json', 'emit machine-readable JSON', false)
   .action(
-    (
+    async (
       prompt: string,
-      opts: { files?: string; diffLines?: string; base?: string; git?: boolean; json?: boolean },
+      opts: {
+        files?: string;
+        diffLines?: string;
+        base?: string;
+        git?: boolean;
+        ai?: boolean;
+        json?: boolean;
+      },
     ) => {
-      const out = runRoute(process.cwd(), prompt, opts);
+      const out = await runRoute(process.cwd(), prompt, opts);
       if (out.exitCode === 0) console.log(out.text);
       else console.error(out.text);
       process.exitCode = out.exitCode;
