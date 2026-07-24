@@ -5,6 +5,7 @@
 import { createRequire } from 'node:module';
 import { Command } from 'commander';
 import { init } from './commands/init.js';
+import { runRoute } from './commands/route.js';
 
 const require = createRequire(import.meta.url);
 const pkg = require('../package.json') as { version: string };
@@ -29,6 +30,20 @@ program
     for (const f of result.created) console.log(`  created  ${f}`);
     for (const f of result.skipped) console.log(`  skipped  ${f}`);
     console.log('\nEdit .codemux/config.json to override routing or hooks.');
+  });
+
+program
+  .command('route')
+  .description('Classify a prompt and emit model/effort/mode directives')
+  .argument('<prompt>', 'the task prompt to route')
+  .option('--files <n>', 'number of files the change is expected to touch')
+  .option('--diff-lines <n>', 'approximate diff size in lines')
+  .option('--json', 'emit machine-readable JSON', false)
+  .action((prompt: string, opts: { files?: string; diffLines?: string; json?: boolean }) => {
+    const out = runRoute(process.cwd(), prompt, opts);
+    if (out.exitCode === 0) console.log(out.text);
+    else console.error(out.text);
+    process.exitCode = out.exitCode;
   });
 
 program.parseAsync(process.argv).catch((err: unknown) => {
