@@ -20,4 +20,6 @@ jobs:
       - run: npm ci
       - run: npm run typecheck
       - run: npm run build
+      # dist/ is committed (for zero-build github installs) — fail if it's stale
+      - run: git diff --exit-code dist
       - run: npm test
