@@ -4,6 +4,17 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres
 to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.3] - 2026-07-25
+
+### Fixed
+
+- **GitHub install now actually works.** v0.4.2's `prepare`-script approach failed
+  on a global git install (`npm install -g github:...`) because npm doesn't install
+  devDependencies — so `tsc` wasn't available and the build crashed. The compiled
+  `dist/` is now **committed to the repo**, so a GitHub install needs no build step
+  and no dev toolchain. CI verifies `dist/` is never stale (`git diff --exit-code
+  dist` after a build). Removed the `prepare` script.
+
 ## [0.4.2] - 2026-07-25
 
 ### Added
@@ -175,6 +186,7 @@ Initial release — the full v1 CLI: routing plus pre/post guardrails.
 - Implemented on Node + TypeScript rather than Bun (per PLAN.md), and the generated
   directory is `.kodemux/` rather than `.middleware/`.
 
+[0.4.3]: https://github.com/vibhusharma101/kodemux/releases/tag/v0.4.3
 [0.4.2]: https://github.com/vibhusharma101/kodemux/releases/tag/v0.4.2
 [0.4.1]: https://github.com/vibhusharma101/kodemux/releases/tag/v0.4.1
 [0.4.0]: https://github.com/vibhusharma101/kodemux/releases/tag/v0.4.0

@@ -3,8 +3,9 @@ node_modules/
 .pnp
 .pnp.js
 
-# Build output
-dist/
+# Build output — dist/ is intentionally committed so `npm install -g github:...`
+# needs no build step (devDependencies aren't installed on a global git install).
+# Rebuild with `npm run build` before committing source changes.
 *.tsbuildinfo
 
 # Logs
