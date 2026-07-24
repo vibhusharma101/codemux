@@ -27,6 +27,21 @@ test('parses a well-formed judge response', async () => {
   }
 });
 
+test('extracts the JSON object even when wrapped in prose', async () => {
+  const client = fakeClient({
+    stop_reason: 'end_turn',
+    content: [
+      {
+        type: 'text',
+        text: 'Sure! Here is my assessment:\n{"complexity": 7, "risks": [], "rationale": "moderate"}\nHope that helps.',
+      },
+    ],
+  });
+  const out = await judgeWithClient(client, 'do something');
+  assert.equal(out.ok, true);
+  if (out.ok) assert.equal(out.result.complexity, 7);
+});
+
 test('clamps out-of-range complexity into [0, 14]', async () => {
   const client = fakeClient(textResponse({ complexity: 99, risks: [], rationale: 'x' }));
   const out = await judgeWithClient(client, 'do something');

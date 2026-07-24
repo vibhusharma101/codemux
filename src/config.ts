@@ -136,11 +136,21 @@ export function loadConfig(cwd: string): KodemuxConfig | null {
   const parsed = (raw ?? {}) as Partial<KodemuxConfig>;
   const base = defaultConfig(parsed.stack ?? []);
   const pr = (parsed.router ?? {}) as Partial<RouterPolicy>;
+
+  // Deep-merge each tier so a partial override (e.g. just `model`) keeps the
+  // base `efforts` instead of dropping it — a shallow spread here would leave
+  // `efforts` undefined and crash the router.
+  const prTiers = (pr.tiers ?? {}) as Partial<Record<Tier, Partial<TierPolicy>>>;
+  const tiers = {} as Record<Tier, TierPolicy>;
+  for (const t of TIERS) {
+    tiers[t] = { ...base.router.tiers[t], ...(prTiers[t] ?? {}) };
+  }
+
   return {
     version: parsed.version ?? base.version,
     stack: parsed.stack ?? base.stack,
     router: {
-      tiers: { ...base.router.tiers, ...(pr.tiers ?? {}) },
+      tiers,
       thresholds: { ...base.router.thresholds, ...(pr.thresholds ?? {}) },
       riskFloor: pr.riskFloor ?? base.router.riskFloor,
       escalateBelowConfidence:

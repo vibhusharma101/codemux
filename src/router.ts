@@ -73,6 +73,13 @@ const INTENT_FLOOR: Partial<Record<Intent, Tier>> = {
   architecture: 'complex',
 };
 
+/**
+ * Confidence assigned to a route after a successful AI-judge consultation —
+ * high enough to sit above the escalation threshold (the ambiguity that
+ * triggered the judge has been resolved), but short of certainty.
+ */
+const AI_ASSISTED_CONFIDENCE = 0.85;
+
 function modeDirective(mode: Mode): string {
   switch (mode) {
     case 'plan':
@@ -215,10 +222,12 @@ export function route(
 
   const spec = p.tiers[tier];
 
-  // Boosted effort at the top of a band or when risk is present.
+  // Boosted effort at the top of a band or when risk is present. `efforts`
+  // falls back defensively so a hand-built policy missing the field can't crash.
+  const efforts = spec.efforts ?? [null, null];
   const upperBand = complexity >= (p.thresholds.frontier + p.thresholds.complex) / 2;
   const boost = risks.length > 0 || upperBand || (a.multiStep && tierIndex(tier) >= tierIndex('complex'));
-  const effort = spec.efforts[boost ? 1 : 0] ?? spec.efforts[0];
+  const effort = efforts[boost ? 1 : 0] ?? efforts[0] ?? null;
 
   const mode = chooseMode(a, tier);
   const target: RouteTarget = { model: spec.model, effort, mode };
@@ -227,7 +236,7 @@ export function route(
   // A successful AI consultation resolves the ambiguity that triggered it —
   // treat the merged decision as confident rather than re-scoring the
   // (now-stale) text-only signal.
-  const confidence = aiAssisted ? 0.85 : estimateConfidence(a, complexity, p);
+  const confidence = aiAssisted ? AI_ASSISTED_CONFIDENCE : estimateConfidence(a, complexity, p);
 
   // Escalation (cascade): recommend the next tier up when unsure.
   let escalation: Escalation | null = null;

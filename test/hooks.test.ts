@@ -1,9 +1,35 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { planPost } from '../src/hooks.js';
-import { runPost } from '../src/commands/post.js';
+import { runPost, stepIsShellSafe } from '../src/commands/post.js';
 import { defaultConfig } from '../src/config.js';
 import { tempRepo } from './helpers.js';
+
+test('stepIsShellSafe rejects filenames with shell metacharacters', () => {
+  assert.equal(stepIsShellSafe({ kind: 'format', tool: 'prettier', command: 'x', files: ['src/a.ts'] }), true);
+  assert.equal(
+    stepIsShellSafe({ kind: 'format', tool: 'prettier', command: 'x', files: ['foo;rm -rf ~.ts'] }),
+    false,
+  );
+  assert.equal(
+    stepIsShellSafe({ kind: 'format', tool: 'prettier', command: 'x', files: ['$(whoami).ts'] }),
+    false,
+  );
+});
+
+test('runPost --run skips (does not execute) a step with a shell-unsafe path', () => {
+  const { dir, cleanup } = tempRepo();
+  try {
+    // If this were executed via the shell, the injected command would run. The
+    // guard must skip it instead — and because it is skipped, no real tool is
+    // ever invoked, so the test is safe and deterministic.
+    const out = runPost(dir, { files: ['foo;touch INJECTED.ts'], run: true });
+    assert.equal(out.exitCode, 1);
+    assert.match(out.text, /shell-unsafe/);
+  } finally {
+    cleanup();
+  }
+});
 
 test('planPost emits format/lint/test for changed TS files', () => {
   const cfg = defaultConfig(['node']);

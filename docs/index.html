@@ -246,9 +246,11 @@
       <span class="eyebrow">repo-native middleware · for AI coding agents</span>
       <h1>Route each task to the <span class="em">cheapest model that can do it.</span></h1>
       <p class="lede">
-        kodemux estimates how hard a prompt really is — from signals, not a keyword lookup — and picks a rung on a
-        <strong>Haiku → Sonnet → Opus → Fable</strong> ladder. It flags security &amp; production risk, and when it
-        isn't sure, it <strong>escalates</strong> instead of guessing. Then it wraps the change in git-level guardrails.
+        kodemux estimates how hard a prompt really is — from signals, not a keyword lookup — and decides the whole
+        execution plan: which <strong>model</strong> on a Haiku → Sonnet → Opus → Fable ladder, at what
+        <strong>effort</strong>, in what <strong>mode</strong>, and <strong>how many agents to run in parallel</strong>.
+        It flags security &amp; production risk, escalates when unsure instead of guessing, and wraps the change in
+        git-level guardrails.
       </p>
 
       <div class="pipeline" aria-hidden="true">
@@ -663,8 +665,9 @@ function render(){
   // directives
   const dv = $("directives"); dv.innerHTML="";
   const heat = r.target.effort ? EFFORT_HEAT[r.target.effort] : TIER_HEAT[r.tier];
-  const modeVal = r.target.mode === "multi-agent" ? `${r.target.mode} · ${r.parallelAgents} agents in parallel` : r.target.mode;
-  const rows = [["model", r.target.model], ["effort", r.target.effort || "n/a (Haiku has no effort control)"], ["mode", modeVal]];
+  const rows = [["model", r.target.model], ["effort", r.target.effort || "n/a (Haiku has no effort control)"], ["mode", r.target.mode]];
+  // Surface parallelism as its own row — kodemux plans the whole run, not just the model.
+  if (r.target.mode === "multi-agent") rows.push(["agents", `${r.parallelAgents} in parallel  →  /agents ${r.parallelAgents}`]);
   rows.forEach(([k,v],i)=>{ const el=document.createElement("div"); el.className="dir"; el.style.borderLeftColor=heat; el.style.animationDelay=(i*0.05)+"s"; el.innerHTML=`<span class="dk">${k}</span><span class="dv">${v}</span>`; dv.appendChild(el); });
 
   // confidence

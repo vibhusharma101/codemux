@@ -4,6 +4,37 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres
 to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.1] - 2026-07-25
+
+Code-review hardening pass — bug fixes and robustness, no behavior change for
+correct configs.
+
+### Fixed
+
+- **Crash on partial tier config override.** A `.kodemux/config.json` that
+  overrode a tier's `model` without also specifying `efforts` (a documented,
+  supported shape) dropped `efforts` on a shallow merge and crashed the router
+  with "Cannot read properties of undefined". `loadConfig` now deep-merges each
+  tier so a partial override keeps the base `efforts`; `route()` also falls back
+  defensively if a hand-built policy omits the field.
+
+### Changed
+
+- **AI judge is now SDK/model-portable.** The judge no longer depends on
+  structured-output (`output_config.format`) support; it asks for a JSON object
+  and parses it tolerantly (handles surrounding prose), so it works across SDK
+  and model versions instead of silently no-op-ing where structured outputs
+  aren't honored.
+- **`kodemux post --run` closes a shell-injection surface.** It refuses to
+  execute a format/lint step whose changed-file path contains shell
+  metacharacters (e.g. a file named `foo;rm -rf ~.ts`), skipping it with a clear
+  message instead of interpolating it into a shell command.
+- Named the post-AI-assist confidence constant (`AI_ASSISTED_CONFIDENCE`).
+- Explainer page: surfaces the parallel-agent recommendation more prominently
+  (dedicated `agents` row + hero copy) — kodemux plans the whole run (model,
+  effort, mode, *and* how many agents), not just the model.
+- 5 new regression tests (79 → **84**).
+
 ## [0.4.0] - 2026-07-24
 
 AI-assisted escalation — an optional, cheap second opinion for the ambiguous
@@ -132,6 +163,7 @@ Initial release — the full v1 CLI: routing plus pre/post guardrails.
 - Implemented on Node + TypeScript rather than Bun (per PLAN.md), and the generated
   directory is `.kodemux/` rather than `.middleware/`.
 
+[0.4.1]: https://github.com/vibhusharma101/kodemux/releases/tag/v0.4.1
 [0.4.0]: https://github.com/vibhusharma101/kodemux/releases/tag/v0.4.0
 [0.3.1]: https://github.com/vibhusharma101/kodemux/releases/tag/v0.3.1
 [0.3.0]: https://github.com/vibhusharma101/kodemux/releases/tag/v0.3.0

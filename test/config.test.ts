@@ -25,6 +25,26 @@ test('defaultConfig builds the capability ladder and protects main', () => {
   assert.ok(cfg.hooks.pre.branchProtection.includes('main'));
 });
 
+test('a partial tier override keeps the base efforts (regression: crash)', () => {
+  const { dir, cleanup } = tempRepo();
+  try {
+    mkdirSync(join(dir, CONFIG_DIR));
+    writeFileSync(
+      join(dir, CONFIG_DIR, 'config.json'),
+      // model only — no `efforts`; a shallow merge would drop efforts and crash the router
+      JSON.stringify({ router: { tiers: { complex: { model: 'claude-fable-5' } } } }),
+    );
+    const cfg = loadConfig(dir);
+    assert.ok(cfg);
+    assert.equal(cfg.router.tiers.complex.model, 'claude-fable-5'); // override applied
+    assert.deepEqual(cfg.router.tiers.complex.efforts, ['high', 'xhigh']); // base efforts kept
+    // other tiers untouched
+    assert.equal(cfg.router.tiers.simple.model, 'claude-haiku-4-5');
+  } finally {
+    cleanup();
+  }
+});
+
 test('aiAssist can be disabled via a partial config override', () => {
   const { dir, cleanup } = tempRepo();
   try {
