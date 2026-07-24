@@ -44,26 +44,19 @@ function clamp(n: number, lo: number, hi: number): number {
   return Math.max(lo, Math.min(hi, n));
 }
 
-const JUDGE_SCHEMA = {
-  type: 'object',
-  properties: {
-    complexity: {
-      type: 'integer',
-      description: 'Estimated task difficulty from 0 (trivial) to 14 (extremely hard, long-horizon).',
-    },
-    risks: {
-      type: 'array',
-      items: { type: 'string', enum: KNOWN_RISKS },
-      description: 'Any of: security, production, critical (touches a high-blast-radius area).',
-    },
-    rationale: {
-      type: 'string',
-      description: 'One short sentence explaining the estimate.',
-    },
-  },
-  required: ['complexity', 'risks', 'rationale'],
-  additionalProperties: false,
-} as const;
+/**
+ * Extract the first JSON object from a text blob. Tolerant of surrounding prose
+ * so the judge works on any model/SDK without depending on structured-output
+ * support. Throws if no object is present (caught by the caller).
+ */
+function extractJsonObject(text: string): unknown {
+  const start = text.indexOf('{');
+  const end = text.lastIndexOf('}');
+  if (start === -1 || end === -1 || end < start) {
+    throw new Error('no JSON object found in judge response');
+  }
+  return JSON.parse(text.slice(start, end + 1));
+}
 
 function buildJudgePrompt(prompt: string, signals: Signals): string {
   const lines = [
@@ -78,6 +71,9 @@ function buildJudgePrompt(prompt: string, signals: Signals): string {
     '',
     'Estimate complexity 0-14 (0=trivial like a typo, 14=extremely hard long-horizon work).',
     'Flag security/production/critical risk only if genuinely warranted by the task or paths.',
+    '',
+    'Respond with ONLY a JSON object, no prose, in exactly this shape:',
+    '{"complexity": <integer 0-14>, "risks": [<any of "security","production","critical">], "rationale": "<one short sentence>"}',
   );
   return lines.join('\n');
 }
@@ -106,7 +102,6 @@ export async function judgeWithClient(
       {
         model: JUDGE_MODEL,
         max_tokens: 300,
-        output_config: { format: { type: 'json_schema', schema: JUDGE_SCHEMA } },
         messages: [{ role: 'user', content: buildJudgePrompt(prompt, signals) }],
       },
       { timeout: JUDGE_TIMEOUT_MS },
@@ -119,7 +114,7 @@ export async function judgeWithClient(
     const textBlock = res.content.find((b) => b.type === 'text');
     if (!textBlock?.text) return { ok: false, reason: 'judge returned no text content' };
 
-    const parsed: unknown = JSON.parse(textBlock.text);
+    const parsed: unknown = extractJsonObject(textBlock.text);
     if (typeof parsed !== 'object' || parsed === null) {
       return { ok: false, reason: 'judge output was not a JSON object' };
     }

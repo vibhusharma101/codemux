@@ -66,6 +66,15 @@ test('config overrides are respected (tier model + thresholds)', () => {
   assert.equal(r.target.model, MODELS.OPUS_4_8);
 });
 
+test('a tier policy missing efforts does not crash the router', () => {
+  const cfg = defaultConfig(['node']);
+  // simulate a malformed/partial hand-built policy
+  (cfg.router.tiers.standard as { efforts?: unknown }).efforts = undefined;
+  const r = route('add a small feature', cfg);
+  assert.equal(r.tier, 'standard');
+  assert.equal(r.target.effort, null); // defensive fallback, no throw
+});
+
 test('single-agent modes recommend exactly one agent', () => {
   const r = route('fix a typo in the README');
   assert.equal(r.parallelAgents, 1);

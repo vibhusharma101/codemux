@@ -22,6 +22,18 @@ export interface PostOutput {
 }
 
 /**
+ * Shell metacharacters that could turn an interpolated filename into a second
+ * command. Tool binaries (npm/prettier/…) are often `.cmd` shims on Windows, so
+ * we keep the shell for resolution and instead refuse to execute steps whose
+ * file paths contain these characters. git-reported paths never contain them.
+ */
+const SHELL_UNSAFE = /[;&|`$<>(){}\n\r'"]/;
+
+export function stepIsShellSafe(step: PostStep): boolean {
+  return !step.files.some((f) => SHELL_UNSAFE.test(f));
+}
+
+/**
  * Pure planning + optional execution. In plan mode (default) this never shells
  * out, so it is safe and deterministic in tests.
  */
@@ -55,6 +67,13 @@ export function runPost(cwd: string, opts: PostOptions = {}): PostOutput {
   const results: string[] = [];
   let failed = 0;
   for (const step of steps) {
+    if (!stepIsShellSafe(step)) {
+      failed++;
+      results.push(
+        `  ✗ [${step.kind}] ${step.command} — skipped: a changed path contains shell-unsafe characters; run this tool manually`,
+      );
+      continue;
+    }
     try {
       execSync(step.command, { cwd, stdio: 'pipe' });
       results.push(`  ✓ [${step.kind}] ${step.command}`);

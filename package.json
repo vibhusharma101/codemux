@@ -1,6 +1,6 @@
 {
   "name": "kodemux",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "Repo-native middleware & guardrail engine for AI coding tools — routes prompts to the optimal model/effort/mode and enforces git-level guardrails.",
   "type": "module",
   "license": "MIT",
