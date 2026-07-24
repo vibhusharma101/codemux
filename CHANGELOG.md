@@ -4,6 +4,18 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres
 to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.2] - 2026-07-25
+
+### Added
+
+- **One-line install from GitHub.** A `prepare` script now compiles the project on
+  install, so `npm install -g github:vibhusharma101/kodemux` clones, builds, and
+  puts a global `kodemux` command on your PATH — cross-platform (macOS/Linux/
+  Windows) and usable inside the Claude Code terminal, no manual build step.
+- README documents the GitHub install and a **Credentials** section explaining how
+  AI-assist reuses an existing `ANTHROPIC_API_KEY` / `ant auth login` session (and
+  that everything else needs no credentials).
+
 ## [0.4.1] - 2026-07-25
 
 Code-review hardening pass — bug fixes and robustness, no behavior change for
@@ -163,6 +175,7 @@ Initial release — the full v1 CLI: routing plus pre/post guardrails.
 - Implemented on Node + TypeScript rather than Bun (per PLAN.md), and the generated
   directory is `.kodemux/` rather than `.middleware/`.
 
+[0.4.2]: https://github.com/vibhusharma101/kodemux/releases/tag/v0.4.2
 [0.4.1]: https://github.com/vibhusharma101/kodemux/releases/tag/v0.4.1
 [0.4.0]: https://github.com/vibhusharma101/kodemux/releases/tag/v0.4.0
 [0.3.1]: https://github.com/vibhusharma101/kodemux/releases/tag/v0.3.1
