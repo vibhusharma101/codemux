@@ -4,13 +4,10 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>codemux — the routing layer for AI coding agents</title>
-<meta name="description" content="codemux sits between your prompt and your AI coding agent: it classifies the task, routes it to the right model / effort / mode, and enforces git-level guardrails. Try the live router below." />
+<meta name="description" content="codemux sits between your prompt and your AI coding agent: it estimates the task's complexity, routes it to the cheapest capable model on a Haiku→Sonnet→Opus→Fable ladder, and escalates when unsure. Try the live router." />
 <style>
-  /* ---------- Tokens ---------- */
   :root {
     color-scheme: light dark;
-
-    /* cool, slightly teal-biased neutrals — chosen, not default grey */
     --paper: #eceff0;
     --surface: #ffffff;
     --surface-2: #f4f6f6;
@@ -19,142 +16,84 @@
     --ink-3: #6d7c84;
     --line: #d5dcde;
     --line-2: #e5eaeb;
-
-    /* single bold accent: the signal wire */
     --signal: #0d9499;
     --signal-bright: #12b8bd;
     --signal-ghost: rgba(13, 148, 153, 0.12);
-
-    /* effort as a heat scale (semantic, separate from accent) */
     --heat-low: #3f8fb2;
-    --heat-medium: #c0902f;
-    --heat-high: #d5763a;
-    --heat-xhigh: #cb4a41;
-
-    /* status semantics */
+    --heat-medium: #4f97a0;
+    --heat-high: #c0902f;
+    --heat-xhigh: #d5763a;
+    --heat-max: #cb4a41;
     --good: #2c8a5b;
     --good-bg: rgba(44, 138, 91, 0.12);
     --crit: #cb4a41;
     --crit-bg: rgba(203, 74, 65, 0.12);
-
+    --warn: #c0902f;
+    --warn-bg: rgba(192, 144, 47, 0.14);
     --mono: ui-monospace, "SF Mono", "Cascadia Code", "JetBrains Mono", Menlo, Consolas, monospace;
     --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, Roboto, sans-serif;
-
     --radius: 4px;
     --maxw: 1000px;
   }
-
   @media (prefers-color-scheme: dark) {
     :root {
-      --paper: #0c1215;
-      --surface: #121a1e;
-      --surface-2: #162024;
-      --ink: #e7edee;
-      --ink-2: #a3b0b5;
-      --ink-3: #71828a;
-      --line: #253238;
-      --line-2: #1c272b;
-      --signal: #1fc0c5;
-      --signal-bright: #37d6da;
-      --signal-ghost: rgba(31, 192, 197, 0.14);
-      --heat-low: #57a6c4;
-      --heat-medium: #d3a648;
-      --heat-high: #e3894c;
-      --heat-xhigh: #e06258;
-      --good: #48b57e;
-      --good-bg: rgba(72, 181, 126, 0.16);
-      --crit: #e06258;
-      --crit-bg: rgba(224, 98, 88, 0.16);
+      --paper: #0c1215; --surface: #121a1e; --surface-2: #162024;
+      --ink: #e7edee; --ink-2: #a3b0b5; --ink-3: #71828a;
+      --line: #253238; --line-2: #1c272b;
+      --signal: #1fc0c5; --signal-bright: #37d6da; --signal-ghost: rgba(31,192,197,0.14);
+      --heat-low: #57a6c4; --heat-medium: #5fb0b8; --heat-high: #d3a648; --heat-xhigh: #e3894c; --heat-max: #e06258;
+      --good: #48b57e; --good-bg: rgba(72,181,126,0.16); --crit: #e06258; --crit-bg: rgba(224,98,88,0.16);
+      --warn: #d3a648; --warn-bg: rgba(211,166,72,0.16);
     }
   }
-  /* explicit toggle overrides win in both directions */
   :root[data-theme="light"] {
-    --paper: #eceff0; --surface: #ffffff; --surface-2: #f4f6f6;
-    --ink: #121a1e; --ink-2: #45535b; --ink-3: #6d7c84;
-    --line: #d5dcde; --line-2: #e5eaeb;
-    --signal: #0d9499; --signal-bright: #12b8bd; --signal-ghost: rgba(13,148,153,0.12);
-    --heat-low: #3f8fb2; --heat-medium: #c0902f; --heat-high: #d5763a; --heat-xhigh: #cb4a41;
-    --good: #2c8a5b; --good-bg: rgba(44,138,91,0.12); --crit: #cb4a41; --crit-bg: rgba(203,74,65,0.12);
+    --paper:#eceff0;--surface:#fff;--surface-2:#f4f6f6;--ink:#121a1e;--ink-2:#45535b;--ink-3:#6d7c84;--line:#d5dcde;--line-2:#e5eaeb;
+    --signal:#0d9499;--signal-bright:#12b8bd;--signal-ghost:rgba(13,148,153,0.12);
+    --heat-low:#3f8fb2;--heat-medium:#4f97a0;--heat-high:#c0902f;--heat-xhigh:#d5763a;--heat-max:#cb4a41;
+    --good:#2c8a5b;--good-bg:rgba(44,138,91,0.12);--crit:#cb4a41;--crit-bg:rgba(203,74,65,0.12);--warn:#c0902f;--warn-bg:rgba(192,144,47,0.14);
   }
   :root[data-theme="dark"] {
-    --paper: #0c1215; --surface: #121a1e; --surface-2: #162024;
-    --ink: #e7edee; --ink-2: #a3b0b5; --ink-3: #71828a;
-    --line: #253238; --line-2: #1c272b;
-    --signal: #1fc0c5; --signal-bright: #37d6da; --signal-ghost: rgba(31,192,197,0.14);
-    --heat-low: #57a6c4; --heat-medium: #d3a648; --heat-high: #e3894c; --heat-xhigh: #e06258;
-    --good: #48b57e; --good-bg: rgba(72,181,126,0.16); --crit: #e06258; --crit-bg: rgba(224,98,88,0.16);
+    --paper:#0c1215;--surface:#121a1e;--surface-2:#162024;--ink:#e7edee;--ink-2:#a3b0b5;--ink-3:#71828a;--line:#253238;--line-2:#1c272b;
+    --signal:#1fc0c5;--signal-bright:#37d6da;--signal-ghost:rgba(31,192,197,0.14);
+    --heat-low:#57a6c4;--heat-medium:#5fb0b8;--heat-high:#d3a648;--heat-xhigh:#e3894c;--heat-max:#e06258;
+    --good:#48b57e;--good-bg:rgba(72,181,126,0.16);--crit:#e06258;--crit-bg:rgba(224,98,88,0.16);--warn:#d3a648;--warn-bg:rgba(211,166,72,0.16);
   }
 
-  /* ---------- Base ---------- */
   * { box-sizing: border-box; }
-  html { -webkit-text-size-adjust: 100%; }
   body {
-    margin: 0;
-    background: var(--paper);
-    color: var(--ink);
-    font-family: var(--sans);
-    font-size: 16px;
-    line-height: 1.6;
-    /* faint patchbay grid */
-    background-image:
-      linear-gradient(var(--line-2) 1px, transparent 1px),
-      linear-gradient(90deg, var(--line-2) 1px, transparent 1px);
-    background-size: 28px 28px;
-    background-position: -1px -1px;
+    margin: 0; background: var(--paper); color: var(--ink);
+    font-family: var(--sans); font-size: 16px; line-height: 1.6;
+    background-image: linear-gradient(var(--line-2) 1px, transparent 1px), linear-gradient(90deg, var(--line-2) 1px, transparent 1px);
+    background-size: 28px 28px; background-position: -1px -1px;
   }
   .wrap { max-width: var(--maxw); margin: 0 auto; padding: 0 20px; }
-
   h1, h2, h3 { font-family: var(--mono); font-weight: 600; line-height: 1.2; text-wrap: balance; }
-  a { color: var(--signal); text-decoration-thickness: 1px; text-underline-offset: 2px; }
+  a { color: var(--signal); text-underline-offset: 2px; }
   code { font-family: var(--mono); }
+  .eyebrow { font-family: var(--mono); font-size: 12px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--ink-3); }
 
-  .eyebrow {
-    font-family: var(--mono); font-size: 12px; letter-spacing: 0.18em;
-    text-transform: uppercase; color: var(--ink-3);
-  }
-
-  /* ---------- Top bar ---------- */
-  header.bar {
-    position: sticky; top: 0; z-index: 20;
-    backdrop-filter: blur(8px);
-    background: color-mix(in srgb, var(--paper) 80%, transparent);
-    border-bottom: 1px solid var(--line);
-  }
+  header.bar { position: sticky; top: 0; z-index: 20; backdrop-filter: blur(8px); background: color-mix(in srgb, var(--paper) 80%, transparent); border-bottom: 1px solid var(--line); }
   .bar-inner { display: flex; align-items: center; gap: 16px; height: 56px; }
   .brand { font-family: var(--mono); font-weight: 600; letter-spacing: -0.02em; font-size: 18px; display: flex; align-items: center; gap: 9px; }
   .brand .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--signal); box-shadow: 0 0 0 3px var(--signal-ghost); }
   .bar-spacer { flex: 1; }
   .bar a.ghost { font-family: var(--mono); font-size: 13px; color: var(--ink-2); text-decoration: none; }
   .bar a.ghost:hover { color: var(--ink); }
-  .theme-btn {
-    font-family: var(--mono); font-size: 12px; cursor: pointer;
-    background: var(--surface); color: var(--ink-2);
-    border: 1px solid var(--line); border-radius: var(--radius);
-    padding: 6px 10px; letter-spacing: 0.04em;
-  }
+  .theme-btn { font-family: var(--mono); font-size: 12px; cursor: pointer; background: var(--surface); color: var(--ink-2); border: 1px solid var(--line); border-radius: var(--radius); padding: 6px 10px; letter-spacing: 0.04em; }
   .theme-btn:hover { border-color: var(--signal); color: var(--ink); }
 
-  /* ---------- Hero ---------- */
-  .hero { padding: 54px 0 26px; }
+  .hero { padding: 54px 0 8px; }
   .hero .eyebrow { margin-bottom: 16px; }
   .hero h1 { font-size: clamp(30px, 5.4vw, 52px); letter-spacing: -0.02em; margin: 0 0 18px; }
   .hero h1 .em { color: var(--signal); }
-  .hero .lede { font-size: clamp(17px, 2.2vw, 20px); color: var(--ink-2); max-width: 60ch; margin: 0; }
-  .pipeline {
-    display: flex; flex-wrap: wrap; align-items: stretch; gap: 8px;
-    margin: 30px 0 6px; font-family: var(--mono); font-size: 12.5px;
-  }
-  .pnode {
-    border: 1px solid var(--line); background: var(--surface); border-radius: var(--radius);
-    padding: 9px 12px; display: flex; flex-direction: column; gap: 2px; min-width: 0;
-  }
+  .hero .lede { font-size: clamp(17px, 2.2vw, 20px); color: var(--ink-2); max-width: 62ch; margin: 0; }
+  .pipeline { display: flex; flex-wrap: wrap; align-items: stretch; gap: 8px; margin: 30px 0 6px; font-family: var(--mono); font-size: 12.5px; }
+  .pnode { border: 1px solid var(--line); background: var(--surface); border-radius: var(--radius); padding: 9px 12px; display: flex; flex-direction: column; gap: 2px; }
   .pnode .k { color: var(--ink-3); font-size: 10.5px; letter-spacing: 0.12em; text-transform: uppercase; }
-  .pnode .v { color: var(--ink); }
   .pnode.mux { border-color: var(--signal); box-shadow: inset 0 0 0 1px var(--signal-ghost); }
   .pnode.mux .v { color: var(--signal); }
   .parrow { align-self: center; color: var(--ink-3); font-size: 15px; }
 
-  /* ---------- Panels ---------- */
   section { padding: 40px 0; }
   .section-head { display: flex; align-items: baseline; gap: 14px; margin-bottom: 20px; flex-wrap: wrap; }
   .section-head h2 { font-size: clamp(20px, 3vw, 27px); margin: 0; letter-spacing: -0.01em; }
@@ -163,98 +102,86 @@
 
   .panel { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; }
   .panel-pad { padding: 20px; }
-
-  /* ---------- Router instrument ---------- */
   .router { overflow: hidden; }
-  .router-grid { display: grid; grid-template-columns: 1fr 0.9fr; }
-  @media (max-width: 760px) { .router-grid { grid-template-columns: 1fr; } }
+  .router-grid { display: grid; grid-template-columns: 1fr 1fr; }
+  @media (max-width: 800px) { .router-grid { grid-template-columns: 1fr; } }
   .router-in { padding: 20px; border-right: 1px solid var(--line); }
-  @media (max-width: 760px) { .router-in { border-right: none; border-bottom: 1px solid var(--line); } }
+  @media (max-width: 800px) { .router-in { border-right: none; border-bottom: 1px solid var(--line); } }
   .router-out { padding: 20px; background: var(--surface-2); display: flex; flex-direction: column; gap: 16px; }
 
   label.field { display: block; font-family: var(--mono); font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink-3); margin-bottom: 8px; }
-  textarea#prompt {
-    width: 100%; resize: vertical; min-height: 84px;
-    font-family: var(--mono); font-size: 14px; line-height: 1.5;
-    color: var(--ink); background: var(--paper);
-    border: 1px solid var(--line); border-radius: var(--radius); padding: 12px;
-  }
-  textarea#prompt:focus, input:focus-visible, button:focus-visible, a:focus-visible {
-    outline: 2px solid var(--signal); outline-offset: 2px;
-  }
+  textarea#prompt { width: 100%; resize: vertical; min-height: 84px; font-family: var(--mono); font-size: 14px; line-height: 1.5; color: var(--ink); background: var(--paper); border: 1px solid var(--line); border-radius: var(--radius); padding: 12px; }
+  textarea:focus, input:focus-visible, button:focus-visible, a:focus-visible { outline: 2px solid var(--signal); outline-offset: 2px; }
   .examples { display: flex; flex-wrap: wrap; gap: 6px; margin: 12px 0 20px; }
-  .chip {
-    font-family: var(--mono); font-size: 12px; cursor: pointer;
-    background: var(--surface); color: var(--ink-2);
-    border: 1px solid var(--line); border-radius: 999px; padding: 5px 11px;
-  }
+  .chip { font-family: var(--mono); font-size: 12px; cursor: pointer; background: var(--surface); color: var(--ink-2); border: 1px solid var(--line); border-radius: 999px; padding: 5px 11px; }
   .chip:hover { border-color: var(--signal); color: var(--ink); }
-
   .slider-row { margin-bottom: 16px; }
   .slider-row .top { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 6px; }
-  .slider-row .top .lbl { font-family: var(--mono); font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-3); }
-  .slider-row .top .val { font-family: var(--mono); font-size: 13px; color: var(--ink); font-variant-numeric: tabular-nums; }
+  .slider-row .lbl { font-family: var(--mono); font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-3); }
+  .slider-row .val { font-family: var(--mono); font-size: 13px; color: var(--ink); font-variant-numeric: tabular-nums; }
   input[type="range"] { width: 100%; accent-color: var(--signal); }
+  .note { font-size: 12.5px; color: var(--ink-3); font-family: var(--mono); }
 
-  /* output */
-  .verdict { display: flex; align-items: center; gap: 12px; }
-  .intent-pill {
-    font-family: var(--mono); font-weight: 600; font-size: 15px;
-    color: #fff; padding: 7px 14px; border-radius: var(--radius); letter-spacing: 0.02em;
-    text-transform: lowercase;
-  }
-  .conf { font-family: var(--mono); font-size: 12px; color: var(--ink-3); font-variant-numeric: tabular-nums; }
+  /* complexity meter */
+  .meter-wrap { position: relative; }
+  .meter { height: 12px; border-radius: 99px; background: var(--line-2); overflow: hidden; }
+  .meter .fill { height: 100%; border-radius: 99px; transition: width .35s ease, background .35s ease; }
+  .meter-ticks { position: relative; height: 14px; margin-top: 2px; }
+  .meter-ticks .tick { position: absolute; transform: translateX(-50%); font-family: var(--mono); font-size: 9px; color: var(--ink-3); }
+  @media (prefers-reduced-motion: reduce){ .meter .fill { transition: none; } }
+
+  /* tier ladder */
+  .ladder { display: flex; flex-direction: column-reverse; gap: 6px; }
+  .rung { display: grid; grid-template-columns: 78px 1fr auto; align-items: center; gap: 10px; border: 1px solid var(--line); border-radius: var(--radius); padding: 8px 11px; background: var(--paper); opacity: .5; }
+  .rung.on { opacity: 1; border-color: transparent; box-shadow: inset 0 0 0 2px var(--rc, var(--signal)); background: var(--surface); }
+  .rung .tname { font-family: var(--mono); font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--ink-2); }
+  .rung.on .tname { color: var(--rc, var(--signal)); font-weight: 600; }
+  .rung .tmodel { font-family: var(--mono); font-size: 12.5px; color: var(--ink); }
+  .rung .tblurb { font-size: 11px; color: var(--ink-3); }
+  .rung .tdot { width: 9px; height: 9px; border-radius: 50%; background: var(--rc, var(--line)); }
+
+  .verdict { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+  .pill { font-family: var(--mono); font-weight: 600; font-size: 12.5px; color: #fff; padding: 5px 11px; border-radius: var(--radius); letter-spacing: 0.02em; }
+  .pill.ghost { background: transparent; color: var(--ink-2); border: 1px solid var(--line); font-weight: 500; }
+  .pill.risk { background: var(--crit-bg); color: var(--crit); border: 1px solid color-mix(in srgb, var(--crit) 30%, transparent); }
 
   .directives { display: flex; flex-direction: column; gap: 7px; }
-  .dir {
-    font-family: var(--mono); font-size: 14px; display: flex; align-items: center; gap: 10px;
-    background: var(--paper); border: 1px solid var(--line); border-left-width: 3px;
-    border-radius: var(--radius); padding: 9px 12px;
-    animation: slidein 0.25s ease both;
-  }
+  .dir { font-family: var(--mono); font-size: 14px; display: flex; align-items: center; gap: 10px; background: var(--paper); border: 1px solid var(--line); border-left-width: 3px; border-radius: var(--radius); padding: 9px 12px; animation: slidein .25s ease both; }
   .dir .dk { color: var(--ink-3); font-size: 10.5px; letter-spacing: 0.1em; text-transform: uppercase; min-width: 52px; }
   .dir .dv { color: var(--ink); font-weight: 600; }
-  @keyframes slidein { from { opacity: 0; transform: translateX(-6px); } to { opacity: 1; transform: none; } }
-  @media (prefers-reduced-motion: reduce) { .dir { animation: none; } }
+  @keyframes slidein { from { opacity: 0; transform: translateX(-6px);} to { opacity:1; transform:none; } }
+  @media (prefers-reduced-motion: reduce){ .dir { animation: none; } }
+
+  .conf-row { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 10px; }
+  .conf-row .k { font-family: var(--mono); font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-3); }
+  .conf-track { height: 7px; background: var(--line-2); border-radius: 99px; overflow: hidden; }
+  .conf-fill { height: 100%; border-radius: 99px; transition: width .35s ease; }
+  .conf-row .n { font-family: var(--mono); font-size: 12px; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+
+  .escal { font-family: var(--mono); font-size: 12.5px; border-radius: var(--radius); padding: 10px 12px; background: var(--warn-bg); color: var(--warn); border: 1px solid color-mix(in srgb, var(--warn) 30%, transparent); }
+  .escal b { color: var(--ink); }
 
   .why { border-top: 1px dashed var(--line); padding-top: 14px; }
-  .why .eyebrow { margin-bottom: 8px; display: block; }
+  .why .eyebrow { display: block; margin-bottom: 8px; }
   .why ul { margin: 0; padding-left: 16px; }
   .why li { font-size: 13px; color: var(--ink-2); margin-bottom: 4px; }
   .why code { background: var(--paper); padding: 1px 4px; border-radius: 3px; font-size: 12px; }
 
-  /* score bars */
-  .scores { display: flex; flex-direction: column; gap: 5px; }
-  .score { display: grid; grid-template-columns: 92px 1fr 24px; align-items: center; gap: 8px; }
-  .score .name { font-family: var(--mono); font-size: 11px; color: var(--ink-3); text-transform: lowercase; }
-  .score .track { height: 7px; background: var(--line-2); border-radius: 99px; overflow: hidden; }
-  .score .fill { height: 100%; background: var(--signal); border-radius: 99px; transition: width 0.35s ease; }
-  .score .n { font-family: var(--mono); font-size: 11px; color: var(--ink-2); text-align: right; font-variant-numeric: tabular-nums; }
-  @media (prefers-reduced-motion: reduce) { .score .fill { transition: none; } }
-
-  /* ---------- Matrix table ---------- */
   .table-scroll { overflow-x: auto; border: 1px solid var(--line); border-radius: 8px; }
   table { border-collapse: collapse; width: 100%; font-size: 14px; min-width: 640px; }
   th, td { text-align: left; padding: 12px 14px; border-bottom: 1px solid var(--line-2); }
   thead th { font-family: var(--mono); font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-3); background: var(--surface-2); }
   tbody tr:last-child td { border-bottom: none; }
-  td.intent code { font-weight: 600; }
   .model { font-family: var(--mono); font-size: 13px; }
   .heat { font-family: var(--mono); font-size: 12px; font-weight: 600; padding: 3px 9px; border-radius: 999px; color: #fff; display: inline-block; }
-  .mode-tag { font-family: var(--mono); font-size: 12px; color: var(--ink-2); }
 
-  /* ---------- Guardrails ---------- */
   .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
   @media (max-width: 760px) { .cols { grid-template-columns: 1fr; } }
-  .gr-title { font-family: var(--mono); font-size: 13px; letter-spacing: 0.04em; margin: 0 0 4px; display: flex; align-items: center; gap: 8px; }
+  .gr-title { font-family: var(--mono); font-size: 13px; margin: 0 0 4px; display: flex; align-items: center; gap: 8px; }
   .tag { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; padding: 2px 7px; border-radius: 999px; border: 1px solid var(--line); color: var(--ink-3); }
   .gr-sub { color: var(--ink-3); font-size: 13px; margin: 0 0 14px; }
   textarea.scanbox { width: 100%; min-height: 96px; resize: vertical; font-family: var(--mono); font-size: 12.5px; color: var(--ink); background: var(--paper); border: 1px solid var(--line); border-radius: var(--radius); padding: 10px; }
-  .btn {
-    font-family: var(--mono); font-size: 12px; cursor: pointer;
-    background: var(--signal); color: #fff; border: none; border-radius: var(--radius);
-    padding: 8px 14px; letter-spacing: 0.03em;
-  }
+  .btn { font-family: var(--mono); font-size: 12px; cursor: pointer; background: var(--signal); color: #fff; border: none; border-radius: var(--radius); padding: 8px 14px; letter-spacing: 0.03em; }
   .btn.sec { background: var(--surface); color: var(--ink-2); border: 1px solid var(--line); }
   .btn:hover { filter: brightness(1.05); }
   .btn.sec:hover { border-color: var(--signal); color: var(--ink); }
@@ -265,25 +192,19 @@
   .result .li { display: block; margin-top: 3px; }
   .branch-opts { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 4px; }
 
-  /* ---------- Install / recap ---------- */
   .steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
   @media (max-width: 760px) { .steps { grid-template-columns: 1fr; } }
   .step { border: 1px solid var(--line); border-radius: 8px; background: var(--surface); padding: 16px; }
   .step .n { font-family: var(--mono); color: var(--signal); font-size: 12px; letter-spacing: 0.1em; }
-  .step h3 { font-size: 15px; margin: 6px 0 6px; }
+  .step h3 { font-size: 15px; margin: 6px 0; }
   .step p { margin: 0; color: var(--ink-2); font-size: 13.5px; }
-  pre.code {
-    font-family: var(--mono); font-size: 13px; line-height: 1.7;
-    background: var(--surface); color: var(--ink); border: 1px solid var(--line);
-    border-radius: 8px; padding: 16px 18px; overflow-x: auto; margin: 0;
-  }
+  pre.code { font-family: var(--mono); font-size: 13px; line-height: 1.7; background: var(--surface); color: var(--ink); border: 1px solid var(--line); border-radius: 8px; padding: 16px 18px; overflow-x: auto; margin: 0; }
   pre.code .c { color: var(--ink-3); }
   pre.code .p { color: var(--signal); }
 
   footer { border-top: 1px solid var(--line); padding: 30px 0 60px; color: var(--ink-3); font-size: 13px; }
   footer .frow { display: flex; flex-wrap: wrap; gap: 18px; align-items: center; }
   footer a { font-family: var(--mono); }
-  .note { font-size: 12.5px; color: var(--ink-3); font-family: var(--mono); }
 </style>
 </head>
 <body>
@@ -292,6 +213,7 @@
     <span class="brand"><span class="dot"></span>codemux</span>
     <span class="bar-spacer"></span>
     <a class="ghost" href="#router">router</a>
+    <a class="ghost" href="#ladder">ladder</a>
     <a class="ghost" href="#guardrails">guardrails</a>
     <a class="ghost" href="https://github.com/vibhusharma101/codemux">GitHub ↗</a>
     <button class="theme-btn" id="themeToggle" aria-label="Toggle color theme">◐ theme</button>
@@ -300,20 +222,19 @@
 
 <main>
   <div class="wrap">
-    <!-- HERO -->
-    <section class="hero" style="padding-bottom:8px">
+    <section class="hero">
       <span class="eyebrow">repo-native middleware · for AI coding agents</span>
-      <h1>The <span class="em">routing layer</span> between your prompt and your AI agent.</h1>
+      <h1>Route each task to the <span class="em">cheapest model that can do it.</span></h1>
       <p class="lede">
-        Not every task deserves the biggest model. codemux reads each prompt, decides the right
-        <strong>model · effort · mode</strong>, and wraps the change in git-level guardrails —
-        so trivial edits stay cheap, hard work gets real horsepower, and secrets never leak.
+        codemux estimates how hard a prompt really is — from signals, not a keyword lookup — and picks a rung on a
+        <strong>Haiku → Sonnet → Opus → Fable</strong> ladder. It flags security &amp; production risk, and when it
+        isn't sure, it <strong>escalates</strong> instead of guessing. Then it wraps the change in git-level guardrails.
       </p>
 
       <div class="pipeline" aria-hidden="true">
         <div class="pnode"><span class="k">input</span><span class="v">your prompt</span></div>
         <span class="parrow">→</span>
-        <div class="pnode mux"><span class="k">codemux</span><span class="v">classify + pre-hooks</span></div>
+        <div class="pnode mux"><span class="k">codemux</span><span class="v">estimate + route + pre-hooks</span></div>
         <span class="parrow">→</span>
         <div class="pnode"><span class="k">execute</span><span class="v">Claude Code / agent</span></div>
         <span class="parrow">→</span>
@@ -323,19 +244,18 @@
       </div>
     </section>
 
-    <!-- ROUTER -->
     <section id="router">
       <div class="section-head">
         <span class="num">01</span>
         <h2>Try the router</h2>
-        <p>This runs the actual classifier — type a task and watch it route. No server, no API calls.</p>
+        <p>This runs the <em>actual</em> estimator + policy, ported line-for-line from the source. No server, no API calls.</p>
       </div>
 
       <div class="panel router">
         <div class="router-grid">
           <div class="router-in">
             <label class="field" for="prompt">Task prompt</label>
-            <textarea id="prompt" spellcheck="false">refactor the billing module and split it into services</textarea>
+            <textarea id="prompt" spellcheck="false">design a distributed rate limiter with concurrency control</textarea>
             <div class="examples" id="examples"></div>
 
             <div class="slider-row">
@@ -346,24 +266,41 @@
               <div class="top"><span class="lbl">diff size (lines)</span><span class="val" id="diffVal">40</span></div>
               <input type="range" id="diff" min="0" max="1200" value="40" step="10" />
             </div>
-            <p class="note">Big changes bias toward architecture even without keywords — that's the repo-signal heuristic.</p>
+            <p class="note">Signals are additive: keywords, scope, multi-step structure, and repo size all move the complexity score.</p>
           </div>
 
           <div class="router-out">
             <div>
-              <label class="field">Routing decision</label>
+              <label class="field">Estimate</label>
               <div class="verdict">
-                <span class="intent-pill" id="intentPill">feature</span>
-                <span class="conf" id="conf">confidence 0.00</span>
+                <span class="pill ghost" id="intentPill">intent</span>
+                <span class="pill" id="riskPill" hidden></span>
               </div>
             </div>
 
-            <div class="directives" id="directives"></div>
+            <div class="meter-wrap">
+              <label class="field">Complexity <span id="cval" style="color:var(--ink);float:right"></span></label>
+              <div class="meter"><span class="fill" id="cfill"></span></div>
+              <div class="meter-ticks" id="ticks"></div>
+            </div>
 
             <div>
-              <span class="eyebrow" style="display:block;margin-bottom:8px">intent scores</span>
-              <div class="scores" id="scores"></div>
+              <label class="field">Capability ladder</label>
+              <div class="ladder" id="ladder"></div>
             </div>
+
+            <div>
+              <label class="field">Directives</label>
+              <div class="directives" id="directives"></div>
+            </div>
+
+            <div class="conf-row">
+              <span class="k">confidence</span>
+              <span class="conf-track"><span class="conf-fill" id="cfconf"></span></span>
+              <span class="n" id="confn"></span>
+            </div>
+
+            <div class="escal" id="escal" hidden></div>
 
             <div class="why">
               <span class="eyebrow">why this route</span>
@@ -374,24 +311,21 @@
       </div>
     </section>
 
-    <!-- MATRIX -->
-    <section>
+    <section id="ladder">
       <div class="section-head">
         <span class="num">02</span>
-        <h2>The router matrix</h2>
-        <p>Five intents, each mapped to a target. Every row is overridable in <code>.codemux/config.json</code>.</p>
+        <h2>The capability ladder</h2>
+        <p>Four rungs by cost &amp; capability. The router picks the lowest rung that clears the complexity threshold — then floors upward for risk.</p>
       </div>
       <div class="table-scroll">
         <table>
-          <thead>
-            <tr><th>Intent</th><th>When</th><th>Model</th><th>Effort</th><th>Mode</th></tr>
-          </thead>
-          <tbody id="matrixBody"></tbody>
+          <thead><tr><th>Tier</th><th>Model</th><th>Reaches at complexity</th><th>Effort</th><th>Best for</th></tr></thead>
+          <tbody id="ladderBody"></tbody>
         </table>
       </div>
+      <p class="note" style="margin-top:12px">Floors: any <b>security/production</b> risk → <code>complex</code> (Opus) minimum · <code>architecture</code> intent → <code>complex</code> · features/fixes/refactors never route below <code>standard</code> (Sonnet). Haiku takes no <code>/effort</code> directive.</p>
     </section>
 
-    <!-- GUARDRAILS -->
     <section id="guardrails">
       <div class="section-head">
         <span class="num">03</span>
@@ -411,23 +345,19 @@ API_KEY=replace_me</textarea>
           </div>
           <div id="scanResult"></div>
         </div>
-
         <div class="panel panel-pad">
           <p class="gr-title"><code>codemux guard</code> <span class="tag">pre-hook</span></p>
           <p class="gr-sub">Refuses direct edits on a protected branch, so an agent is forced onto a feature branch first.</p>
           <label class="field">Current branch</label>
           <div class="branch-opts" id="branchOpts"></div>
           <textarea class="scanbox" id="branchbox" spellcheck="false" style="min-height:40px">main</textarea>
-          <div class="btnrow">
-            <button class="btn" id="guardRun">Check branch</button>
-          </div>
+          <div class="btnrow"><button class="btn" id="guardRun">Check branch</button></div>
           <div id="guardResult"></div>
           <p class="note" style="margin-top:12px">protected: <code>main</code>, <code>master</code>, <code>production</code></p>
         </div>
       </div>
     </section>
 
-    <!-- INSTALL -->
     <section>
       <div class="section-head">
         <span class="num">04</span>
@@ -444,20 +374,19 @@ curl -fsSL https://raw.githubusercontent.com/vibhusharma101/codemux/main/install
 
 <span class="c"># in any repo</span>
 codemux init
-codemux route <span class="p">"add a CSV export endpoint"</span>   <span class="c"># → sonnet-5 / high / /plan</span>
+codemux route <span class="p">"design a distributed rate limiter"</span>   <span class="c"># → opus-4-8 / xhigh / /plan</span>
+codemux route <span class="p">"fix a typo in the README"</span>          <span class="c"># → haiku-4-5 / single</span>
 codemux guard <span class="c"># refuse edits on main</span>
-codemux scan  <span class="c"># secrets check</span>
-codemux post  <span class="c"># scoped format + lint + tests</span></pre>
+codemux scan  <span class="c"># secrets check</span></pre>
     </section>
 
-    <!-- RECAP -->
     <section style="padding-top:20px">
       <div class="panel panel-pad" style="border-color:var(--signal); box-shadow: inset 0 0 0 1px var(--signal-ghost);">
         <span class="eyebrow" style="display:block;margin-bottom:10px">the one idea</span>
         <p style="font-family:var(--mono); font-size:clamp(16px,2.4vw,21px); line-height:1.5; margin:0; color:var(--ink);">
-          Model choice shouldn't be a habit or a guess. codemux makes it an
-          <span style="color:var(--signal)">explicit, overridable, testable</span> decision — and
-          fences every change with the same guardrails a careful reviewer would.
+          Model choice should track <span style="color:var(--signal)">how hard the task actually is</span> — estimated from
+          many signals, floored for risk, and <span style="color:var(--signal)">escalated when unsure</span>. That's a decision
+          you can read, test, and override — not a habit.
         </p>
       </div>
     </section>
@@ -470,260 +399,293 @@ codemux post  <span class="c"># scoped format + lint + tests</span></pre>
     <span class="bar-spacer"></span>
     <a href="https://github.com/vibhusharma101/codemux">source</a>
     <a href="https://github.com/vibhusharma101/codemux/blob/main/PLAN.md">plan</a>
-    <a href="https://github.com/vibhusharma101/codemux/releases/tag/v0.1.0">v0.1.0</a>
+    <a href="https://github.com/vibhusharma101/codemux/releases">releases</a>
     <span class="note">MIT · built with the Think-In-HTML approach</span>
   </div>
 </footer>
 
 <script>
 /* ============================================================
-   codemux logic, ported faithfully from the TypeScript source
-   (src/classify.ts, src/router.ts, src/scan.ts, src/commands/guard.ts)
+   codemux router, ported line-for-line from the TypeScript source
+   (src/classify.ts, src/router.ts, src/config.ts, src/scan.ts)
    so this page demonstrates the real behavior, not a mock.
    ============================================================ */
 
-const KEYWORDS = {
-  security: ["security","secure","audit","vulnerability","vulnerabilities","vuln","exploit","owasp","pentest","threat","cve","injection","xss","csrf"],
-  architecture: ["architecture","architect","refactor","redesign","migrate","migration","rewrite","overhaul","restructure","large-scale","system design","decouple","modularize"],
-  bugfix: ["fix","bug","patch","hotfix","repair","broken","crash","regression","error","exception","failing"],
-  docs: ["docs","doc","documentation","readme","comment","comments","changelog","typo","test","tests","unit test","jsdoc","docstring"],
+const MODELS = { HAIKU:"claude-haiku-4-5", SONNET:"claude-sonnet-5", OPUS:"claude-opus-4-8", FABLE:"claude-fable-5" };
+const TIERS = ["simple","standard","complex","frontier"];
+const TIER_SPECS = {
+  simple:   { model:MODELS.HAIKU,  efforts:[null,null],        blurb:"mechanical, low-risk edits" },
+  standard: { model:MODELS.SONNET, efforts:["medium","high"],  blurb:"everyday features & fixes" },
+  complex:  { model:MODELS.OPUS,   efforts:["high","xhigh"],   blurb:"hard, multi-file, autonomous work" },
+  frontier: { model:MODELS.FABLE,  efforts:["xhigh","max"],    blurb:"most demanding reasoning & long-horizon work" },
+};
+const POLICY = { thresholds:{ standard:2, complex:5, frontier:9 }, riskFloor:"complex", escalateBelowConfidence:0.6 };
+const tierIndex = (t) => TIERS.indexOf(t);
+const TIER_HEAT = { simple:"var(--heat-low)", standard:"var(--heat-medium)", complex:"var(--heat-xhigh)", frontier:"var(--heat-max)" };
+const EFFORT_HEAT = { low:"var(--heat-low)", medium:"var(--heat-medium)", high:"var(--heat-high)", xhigh:"var(--heat-xhigh)", max:"var(--heat-max)" };
+
+const INTENTS = ["docs","test","bugfix","feature","refactor","architecture","security"];
+const DEFAULT_INTENT = "feature";
+const INTENT_KEYWORDS = {
+  security: ["security","secure","audit","vulnerability","vulnerabilities","vuln","exploit","owasp","pentest","threat","cve","injection","xss","csrf","auth","authentication","authorization"],
+  architecture: ["architecture","architect","redesign","system design","rearchitect","greenfield","from scratch","scaffold a","design a","design the"],
+  refactor: ["refactor","restructure","decouple","modularize","rewrite","overhaul","migrate","migration","clean up","extract"],
+  bugfix: ["fix","bug","patch","hotfix","repair","broken","crash","regression","error","exception","failing","debug","root cause"],
+  test: ["test","tests","unit test","coverage","spec","e2e","fixture"],
+  docs: ["docs","doc","documentation","readme","comment","comments","changelog","typo","jsdoc","docstring","wording"],
   feature: ["add","implement","build","create","feature","support","introduce","new","endpoint","component"],
 };
-const INTENTS = ["security","architecture","bugfix","docs","feature"];
-const PRIORITY = ["security","architecture","feature","bugfix","docs"];
-const DEFAULT_INTENT = "feature";
+const INTENT_PRIORITY = ["security","architecture","refactor","feature","bugfix","test","docs"];
+const INTENT_FLOOR = { bugfix:"standard", feature:"standard", refactor:"standard", architecture:"complex" };
 
-const MATRIX = {
-  architecture: { model: "claude-fable-5",  effort: "xhigh",  mode: "multi-agent", when: "refactor · redesign · large diff" },
-  feature:      { model: "claude-sonnet-5", effort: "high",   mode: "plan",        when: "add · implement · build (default)" },
-  bugfix:       { model: "claude-sonnet-5", effort: "medium", mode: "single",      when: "fix · crash · regression · tiny diff" },
-  docs:         { model: "claude-haiku-4-5", effort: "low",   mode: "single",      when: "docs · README · tests · typo" },
-  security:     { model: "claude-fable-5",  effort: "high",   mode: "read-only",   when: "audit · vulnerability · OWASP" },
-};
-const HEAT = { low: "var(--heat-low)", medium: "var(--heat-medium)", high: "var(--heat-high)", xhigh: "var(--heat-xhigh)" };
+const COMPLEXITY_TERMS = ["distributed","concurrency","concurrent","race condition","deadlock","threading","multithread","async","parallel","algorithm","optimize","optimization","performance","scalability","throughput","latency","architecture","redesign","design","migrate","migration","rewrite","overhaul","protocol","consensus","cryptography","encryption","compiler","parser","state machine","memory leak","end-to-end","pipeline","orchestrate","rearchitect","from scratch"];
+const SIMPLICITY_TERMS = ["typo","rename","comment","formatting","lint","whitespace","bump","changelog","readme","spelling","wording","indent","reword","one-liner","trivial"];
+const SCOPE_TERMS = ["entire","whole","across the","codebase","system-wide","everywhere","all files","throughout","every module","end-to-end"];
+const UNCERTAINTY_TERMS = ["investigate","root cause","figure out","diagnose","unknown","unclear","not sure","why is","reproduce","intermittent","flaky"];
+const RISK_SECURITY_TERMS = ["security","secure","auth","authentication","authorization","vulnerability","vulnerabilities","exploit","owasp","cve","injection","xss","csrf","crypto","cryptography","password","secret","token","payment","pii","gdpr"];
+const RISK_PRODUCTION_TERMS = ["production","deploy","release","irreversible","rollback","breaking change","data loss","schema change","database migration","db migration","downtime"];
 
-function escapeRe(s){ return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"); }
-function countMatches(text, kw){
-  const re = new RegExp("\\b" + escapeRe(kw) + "\\b", "gi");
-  return (text.match(re) || []).length;
-}
+const escRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+const countMatches = (text, term) => (text.match(new RegExp(`\\b${escRe(term)}\\b`, "gi")) || []).length;
+const anyMatch = (text, terms) => terms.filter((t) => countMatches(text, t) > 0);
+const COMPLEXITY_MAX = 14;
 
-function classify(prompt, fileCount, diffLines){
+function analyze(prompt, signals){
+  signals = signals || {};
   const text = (prompt || "").toLowerCase();
-  const scores = { security:0, architecture:0, bugfix:0, docs:0, feature:0 };
-  const hits = { security:[], architecture:[], bugfix:[], docs:[], feature:[] };
-  for (const intent of INTENTS){
-    for (const kw of KEYWORDS[intent]){
-      const n = countMatches(text, kw);
-      if (n > 0){ scores[intent] += n; hits[intent].push(kw); }
-    }
-  }
   const reasons = [];
-  if ((fileCount||0) >= 10 || (diffLines||0) >= 500){
-    scores.architecture += 2;
-    reasons.push(`large change (${fileCount} files / ${diffLines} lines) → +architecture`);
+
+  const iScore = {}; const iHits = {};
+  INTENTS.forEach((i)=>{ iScore[i]=0; iHits[i]=[]; });
+  for (const intent of INTENTS) for (const kw of INTENT_KEYWORDS[intent]) {
+    const n = countMatches(text, kw);
+    if (n>0){ iScore[intent]+=n; iHits[intent].push(kw); }
   }
-  if (fileCount !== undefined && fileCount <= 1 && (diffLines||0) <= 20 && scores.bugfix > 0){
-    scores.bugfix += 1;
-    reasons.push("small, single-file change → +bugfix");
+  let intent = DEFAULT_INTENT, best = -1;
+  for (const cand of INTENT_PRIORITY) if (iScore[cand] > best){ best = iScore[cand]; intent = cand; }
+  if (best <= 0) intent = DEFAULT_INTENT;
+
+  let complexity = 0;
+  const complexityHits = anyMatch(text, COMPLEXITY_TERMS); complexity += complexityHits.length*2;
+  const simplicityHits = anyMatch(text, SIMPLICITY_TERMS); complexity -= simplicityHits.length*2;
+  const scopeHits = anyMatch(text, SCOPE_TERMS); const scopeWide = scopeHits.length>0;
+  if (scopeWide){ complexity += 2; reasons.push(`wide scope (${scopeHits.slice(0,2).join(", ")}) → +complexity`); }
+  const uncertaintyHits = anyMatch(text, UNCERTAINTY_TERMS);
+  if (uncertaintyHits.length){ const b=Math.min(2,uncertaintyHits.length); complexity+=b; reasons.push(`investigation required (${uncertaintyHits[0]}) → +${b}`); }
+  const connectors = (text.match(/\b(and then|then|also|afterwards|followed by)\b|;/gi) || []).length;
+  const multiStep = connectors >= 1;
+  if (multiStep){ const b=Math.min(3,connectors); complexity+=b; reasons.push(`multi-step request (${connectors} connector${connectors>1?"s":""}) → +${b}`); }
+
+  const fc = signals.fileCount, dl = signals.diffLines;
+  if (fc !== undefined){
+    if (fc>=20){ complexity+=4; reasons.push(`${fc} files touched → +4`); }
+    else if (fc>=10){ complexity+=2; reasons.push(`${fc} files touched → +2`); }
+    else if (fc<=1){ complexity-=1; reasons.push("single-file change → -1"); }
   }
-  const total = Object.values(scores).reduce((a,b)=>a+b, 0);
-  let winner = DEFAULT_INTENT, best = -1;
-  for (const intent of PRIORITY){
-    if (scores[intent] > best){ best = scores[intent]; winner = intent; }
+  if (dl !== undefined){
+    if (dl>=800){ complexity+=3; reasons.push(`~${dl} diff lines → +3`); }
+    else if (dl>=300){ complexity+=2; reasons.push(`~${dl} diff lines → +2`); }
+    else if (dl<=20 && dl>0){ complexity-=1; reasons.push("tiny diff → -1"); }
   }
-  if (total === 0){
-    return { intent: DEFAULT_INTENT, confidence: 0, reasons: ["no keywords matched — defaulting to feature"], scores, hits };
-  }
-  if (hits[winner].length){
-    reasons.unshift(`matched ${winner} keywords: ${hits[winner].join(", ")}`);
-  }
-  return { intent: winner, confidence: +(scores[winner]/total).toFixed(2), reasons, scores, hits };
+  if (complexityHits.length) reasons.unshift(`complexity signals: ${complexityHits.slice(0,4).join(", ")}`);
+  if (simplicityHits.length) reasons.push(`simplicity signals: ${simplicityHits.slice(0,4).join(", ")}`);
+  complexity = Math.max(0, Math.min(COMPLEXITY_MAX, complexity));
+
+  const risks = [];
+  const secHits = anyMatch(text, RISK_SECURITY_TERMS);
+  if (secHits.length){ risks.push("security"); reasons.push(`security-sensitive (${secHits.slice(0,2).join(", ")})`); }
+  const prodHits = anyMatch(text, RISK_PRODUCTION_TERMS);
+  if (prodHits.length){ risks.push("production"); reasons.push(`production-risk (${prodHits.slice(0,2).join(", ")})`); }
+
+  return { intent, complexity, risks, scopeWide, multiStep, steps:connectors, complexityHits, simplicityHits, intentHits:iHits[intent], reasons };
 }
 
-function directivesFor(t){
-  const modeDir = t.mode === "plan" ? "/plan"
-    : t.mode === "single" ? "/mode single"
-    : t.mode === "multi-agent" ? "/mode multi-agent"
-    : "/mode read-only";
-  return [
-    { k: "model",  v: "/model " + t.model },
-    { k: "effort", v: "/effort " + t.effort },
-    { k: "mode",   v: modeDir },
-  ];
+function tierFromComplexity(c, p){
+  if (c >= p.thresholds.frontier) return "frontier";
+  if (c >= p.thresholds.complex) return "complex";
+  if (c >= p.thresholds.standard) return "standard";
+  return "simple";
+}
+const maxTier = (a,b) => tierIndex(a) >= tierIndex(b) ? a : b;
+function boundaryDistance(c, p){ const b=[p.thresholds.standard,p.thresholds.complex,p.thresholds.frontier]; return Math.min(...b.map(x=>Math.abs(c-x))); }
+function estimateConfidence(a, c, p){
+  let conf = 0.5;
+  conf += Math.min(0.35, 0.07*a.reasons.length);
+  if (a.complexityHits.length && a.simplicityHits.length) conf -= 0.2;
+  if (a.simplicityHits.length && !a.complexityHits.length) conf += 0.12;
+  if (a.complexityHits.length >= 3 && !a.simplicityHits.length) conf += 0.12;
+  if (boundaryDistance(c,p) <= 1) conf -= 0.15;
+  if (a.complexity === 0 && a.reasons.length === 0) conf = 0.25;
+  return Math.max(0.05, Math.min(0.97, Number(conf.toFixed(2))));
+}
+function chooseMode(a, tier){
+  const idx = tierIndex(tier);
+  if (a.intent === "security" && a.intentHits.some((h)=>/audit|review|assess/.test(h))) return "read-only";
+  if (idx >= tierIndex("complex") && (a.scopeWide || a.multiStep)) return "multi-agent";
+  if (idx >= tierIndex("standard") && (a.multiStep || a.intent==="feature" || a.intent==="refactor" || a.intent==="architecture")) return "plan";
+  return "single";
+}
+function modeDirective(m){ return m==="plan"?"/plan":m==="single"?"/mode single":m==="multi-agent"?"/mode multi-agent":"/mode read-only"; }
+function directivesFor(t, agents){ const d=[`/model ${t.model}`]; if (t.effort) d.push(`/effort ${t.effort}`); d.push(modeDirective(t.mode)); if (t.mode==="multi-agent" && agents>1) d.push(`/agents ${agents}`); return d; }
+function recommendParallelism(a, mode, fileCount){
+  if (mode !== "multi-agent") return 1;
+  let n = 2;
+  if (fileCount !== undefined){ if (fileCount>=40) n=4; else if (fileCount>=20) n=3; }
+  n += Math.min(2, Math.max(0, a.steps-1));
+  if (a.scopeWide) n += 1;
+  return Math.max(2, Math.min(6, n));
+}
+
+function route(prompt, signals){
+  const p = POLICY;
+  const a = analyze(prompt, signals);
+  let tier = tierFromComplexity(a.complexity, p);
+  if (INTENT_FLOOR[a.intent]) tier = maxTier(tier, INTENT_FLOOR[a.intent]);
+  if (a.risks.length) tier = maxTier(tier, p.riskFloor);
+  const spec = TIER_SPECS[tier];
+  const upperBand = a.complexity >= (p.thresholds.frontier + p.thresholds.complex)/2;
+  const boost = a.risks.length>0 || upperBand || (a.multiStep && tierIndex(tier) >= tierIndex("complex"));
+  const effort = spec.efforts[boost?1:0] ?? spec.efforts[0];
+  const mode = chooseMode(a, tier);
+  const target = { model:spec.model, effort, mode };
+  const parallelAgents = recommendParallelism(a, mode, signals && signals.fileCount);
+  const confidence = estimateConfidence(a, a.complexity, p);
+  let escalation = null;
+  const idx = tierIndex(tier);
+  if (idx < TIERS.length-1 && confidence < p.escalateBelowConfidence){
+    const next = TIERS[idx+1];
+    escalation = { model:TIER_SPECS[next].model, tier:next, trigger:"if the agent stalls, reports low confidence, or the change proves larger than estimated" };
+  }
+  const reasons = a.reasons.slice();
+  reasons.unshift(`complexity ${a.complexity} + ${a.risks.length?`risk[${a.risks.join(",")}] `:""}intent ${a.intent} → ${tier} tier`);
+  if (mode === "multi-agent") reasons.push(`parallelizable work → fan out to ${parallelAgents} agents`);
+  return { intent:a.intent, complexity:a.complexity, tier, risks:a.risks, target, parallelAgents, confidence, escalation, directives:directivesFor(target, parallelAgents), reasons };
 }
 
 /* ---- Router UI ---- */
 const $ = (id) => document.getElementById(id);
 const promptEl = $("prompt"), filesEl = $("files"), diffEl = $("diff");
-
 const EXAMPLES = [
   "fix a typo in the README",
-  "run a security audit for OWASP issues",
   "add a CSV export endpoint",
-  "rewrite the whole storage architecture",
-  "write unit tests for the parser",
+  "audit the auth flow for vulnerabilities",
+  "migrate the database schema and deploy to production",
+  "rewrite the storage engine from scratch, optimize for latency",
 ];
-const exWrap = $("examples");
-EXAMPLES.forEach((ex) => {
-  const b = document.createElement("button");
-  b.className = "chip"; b.textContent = ex; b.type = "button";
-  b.addEventListener("click", () => { promptEl.value = ex; render(); });
-  exWrap.appendChild(b);
-});
+EXAMPLES.forEach((ex)=>{ const b=document.createElement("button"); b.className="chip"; b.type="button"; b.textContent=ex; b.addEventListener("click",()=>{ promptEl.value=ex; render(); }); $("examples").appendChild(b); });
+
+// complexity ticks at thresholds
+(function(){ const ticks=$("ticks"); [["2","standard"],["5","complex"],["9","frontier"]].forEach(([v,lbl])=>{ const t=document.createElement("span"); t.className="tick"; t.style.left=(Number(v)/COMPLEXITY_MAX*100)+"%"; t.textContent=v; t.title=lbl; ticks.appendChild(t); }); })();
+
+// ladder rungs (static skeleton; highlight active on render)
+(function(){ const L=$("ladder"); TIERS.forEach((t)=>{ const r=document.createElement("div"); r.className="rung"; r.dataset.tier=t; r.style.setProperty("--rc", TIER_HEAT[t]); r.innerHTML=`<span class="tname">${t}</span><span><span class="tmodel">${TIER_SPECS[t].model}</span><br><span class="tblurb">${TIER_SPECS[t].blurb}</span></span><span class="tdot"></span>`; L.appendChild(r); }); })();
 
 function render(){
   const files = +filesEl.value, diff = +diffEl.value;
-  $("filesVal").textContent = files;
-  $("diffVal").textContent = diff;
-  const r = classify(promptEl.value, files, diff);
-  const t = MATRIX[r.intent];
+  $("filesVal").textContent = files; $("diffVal").textContent = diff;
+  const r = route(promptEl.value, { fileCount: files, diffLines: diff });
 
-  const pill = $("intentPill");
-  pill.textContent = r.intent;
-  pill.style.background = HEAT[t.effort];
-  $("conf").textContent = "confidence " + r.confidence.toFixed(2);
+  $("intentPill").textContent = r.intent;
+  const risk = $("riskPill");
+  if (r.risks.length){ risk.hidden=false; risk.className="pill risk"; risk.textContent="risk: "+r.risks.join(" · "); } else risk.hidden=true;
 
-  const dirs = directivesFor(t);
-  const dv = $("directives");
-  dv.innerHTML = "";
-  dirs.forEach((d, i) => {
-    const el = document.createElement("div");
-    el.className = "dir";
-    el.style.borderLeftColor = HEAT[t.effort];
-    el.style.animationDelay = (i * 0.05) + "s";
-    el.innerHTML = `<span class="dk">${d.k}</span><span class="dv">${d.v}</span>`;
-    dv.appendChild(el);
-  });
+  // complexity meter
+  $("cval").textContent = r.complexity + " / 14";
+  const cf = $("cfill"); cf.style.width = (r.complexity/COMPLEXITY_MAX*100)+"%"; cf.style.background = TIER_HEAT[r.tier];
 
-  const maxScore = Math.max(1, ...Object.values(r.scores));
-  const sc = $("scores");
-  sc.innerHTML = "";
-  PRIORITY.forEach((intent) => {
-    const val = r.scores[intent];
-    const row = document.createElement("div");
-    row.className = "score";
-    const pct = Math.round((val / maxScore) * 100);
-    const isWin = intent === r.intent;
-    row.innerHTML = `<span class="name">${intent}</span>
-      <span class="track"><span class="fill" style="width:${pct}%;background:${isWin ? HEAT[t.effort] : 'var(--line)'}"></span></span>
-      <span class="n">${val}</span>`;
-    sc.appendChild(row);
-  });
+  // ladder highlight
+  document.querySelectorAll(".rung").forEach((el)=>{ el.classList.toggle("on", el.dataset.tier === r.tier); });
 
-  const why = $("why");
-  why.innerHTML = "";
-  r.reasons.forEach((reason) => {
-    const li = document.createElement("li");
-    li.innerHTML = reason.replace(/`([^`]+)`/g, "<code>$1</code>");
-    why.appendChild(li);
-  });
+  // directives
+  const dv = $("directives"); dv.innerHTML="";
+  const heat = r.target.effort ? EFFORT_HEAT[r.target.effort] : TIER_HEAT[r.tier];
+  const modeVal = r.target.mode === "multi-agent" ? `${r.target.mode} · ${r.parallelAgents} agents in parallel` : r.target.mode;
+  const rows = [["model", r.target.model], ["effort", r.target.effort || "n/a (Haiku has no effort control)"], ["mode", modeVal]];
+  rows.forEach(([k,v],i)=>{ const el=document.createElement("div"); el.className="dir"; el.style.borderLeftColor=heat; el.style.animationDelay=(i*0.05)+"s"; el.innerHTML=`<span class="dk">${k}</span><span class="dv">${v}</span>`; dv.appendChild(el); });
+
+  // confidence
+  const conf = $("cfconf"); conf.style.width=(r.confidence*100)+"%";
+  conf.style.background = r.confidence>=0.6 ? "var(--good)" : "var(--warn)";
+  $("confn").textContent = r.confidence.toFixed(2);
+
+  // escalation
+  const esc = $("escal");
+  if (r.escalation){ esc.hidden=false; esc.innerHTML = `↑ escalate to <b>${r.escalation.model}</b> (${r.escalation.tier}) — ${r.escalation.trigger}.`; }
+  else esc.hidden=true;
+
+  // why
+  const why = $("why"); why.innerHTML="";
+  r.reasons.forEach((reason)=>{ const li=document.createElement("li"); li.innerHTML=reason.replace(/`([^`]+)`/g,"<code>$1</code>"); why.appendChild(li); });
 }
 promptEl.addEventListener("input", render);
 filesEl.addEventListener("input", render);
 diffEl.addEventListener("input", render);
 
-/* ---- Matrix table ---- */
-const mb = $("matrixBody");
-PRIORITY.forEach((intent) => {
-  const t = MATRIX[intent];
-  const tr = document.createElement("tr");
-  tr.innerHTML = `
-    <td class="intent"><code>${intent}</code></td>
-    <td style="color:var(--ink-2)">${t.when}</td>
-    <td class="model">${t.model}</td>
-    <td><span class="heat" style="background:${HEAT[t.effort]}">${t.effort}</span></td>
-    <td class="mode-tag">${t.mode}</td>`;
-  mb.appendChild(tr);
-});
+/* ---- Ladder table ---- */
+(function(){
+  const body = $("ladderBody");
+  const reach = { simple:"0–1 (below standard)", standard:"≥ 2", complex:"≥ 5", frontier:"≥ 9" };
+  TIERS.forEach((t)=>{
+    const s = TIER_SPECS[t];
+    const eff = s.efforts[0]===null ? "—" : `${s.efforts[0]} → ${s.efforts[1]}`;
+    const tr = document.createElement("tr");
+    tr.innerHTML = `<td><span class="heat" style="background:${TIER_HEAT[t]}">${t}</span></td>
+      <td class="model">${s.model}</td><td style="color:var(--ink-2)">${reach[t]}</td>
+      <td class="model">${eff}</td><td style="color:var(--ink-2)">${s.blurb}</td>`;
+    body.appendChild(tr);
+  });
+})();
 
 /* ---- Secrets scan (ported from src/scan.ts) ---- */
 const SECRET_RULES = [
-  { name: "github-token", re: /ghp_[A-Za-z0-9]{36}/ },
-  { name: "github-fine-grained-pat", re: /github_pat_[A-Za-z0-9_]{60,}/ },
-  { name: "openai-key", re: /sk-[A-Za-z0-9]{20,}/ },
-  { name: "aws-access-key-id", re: /AKIA[0-9A-Z]{16}/ },
-  { name: "slack-token", re: /xox[baprs]-[A-Za-z0-9-]{10,}/ },
-  { name: "google-api-key", re: /AIza[0-9A-Za-z_-]{35}/ },
-  { name: "private-key-block", re: /-----BEGIN (?:RSA |EC |DSA |OPENSSH )?PRIVATE KEY-----/ },
+  { name:"github-token", re:/ghp_[A-Za-z0-9]{36}/ },
+  { name:"github-fine-grained-pat", re:/github_pat_[A-Za-z0-9_]{60,}/ },
+  { name:"openai-key", re:/sk-[A-Za-z0-9]{20,}/ },
+  { name:"aws-access-key-id", re:/AKIA[0-9A-Z]{16}/ },
+  { name:"slack-token", re:/xox[baprs]-[A-Za-z0-9-]{10,}/ },
+  { name:"google-api-key", re:/AIza[0-9A-Za-z_-]{35}/ },
+  { name:"private-key-block", re:/-----BEGIN (?:RSA |EC |DSA |OPENSSH )?PRIVATE KEY-----/ },
 ];
-function mask(s){
-  if (s.length <= 8) return s[0] + "****";
-  return s.slice(0,4) + "****" + s.slice(-2);
-}
+function mask(s){ return s.length<=8 ? s[0]+"****" : s.slice(0,4)+"****"+s.slice(-2); }
 function scanText(text){
-  const findings = [];
-  text.split("\n").forEach((line, i) => {
-    for (const rule of SECRET_RULES){
-      const re = new RegExp(rule.re.source, "g");
-      let m;
-      while ((m = re.exec(line)) !== null){
-        findings.push({ rule: rule.name, line: i+1, match: mask(m[0]) });
-        if (m.index === re.lastIndex) re.lastIndex++;
-      }
-    }
-  });
-  return findings;
+  const out=[];
+  text.split("\n").forEach((line,i)=>{ for (const rule of SECRET_RULES){ const re=new RegExp(rule.re.source,"g"); let m; while((m=re.exec(line))!==null){ out.push({rule:rule.name,line:i+1,match:mask(m[0])}); if(m.index===re.lastIndex) re.lastIndex++; } } });
+  return out;
 }
 function runScan(){
-  const findings = scanText($("scanbox").value);
-  const out = $("scanResult");
-  if (findings.length === 0){
-    out.className = "result ok";
-    out.textContent = "✓ codemux scan: no secrets found — safe to hand off.";
-    return;
-  }
-  out.className = "result bad";
-  out.innerHTML = `✗ codemux scan: ${findings.length} potential secret(s) — blocked (exit 1)` +
-    findings.map(f => `<span class="li">line ${f.line} · [${f.rule}] · ${f.match}</span>`).join("");
+  const f = scanText($("scanbox").value); const o=$("scanResult");
+  if (!f.length){ o.className="result ok"; o.textContent="✓ codemux scan: no secrets found — safe to hand off."; return; }
+  o.className="result bad";
+  o.innerHTML = `✗ codemux scan: ${f.length} potential secret(s) — blocked (exit 1)` + f.map(x=>`<span class="li">line ${x.line} · [${x.rule}] · ${x.match}</span>`).join("");
 }
 $("scanRun").addEventListener("click", runScan);
-$("scanLeak").addEventListener("click", () => {
+$("scanLeak").addEventListener("click", ()=>{
   const gh = "ghp_" + "A1b2C3d4E5f6G7h8I9j0K1l2M3n4O5p6Q7r8";
   const aws = "AKIA" + "IOSFODNN7EXAMPLE";
-  $("scanbox").value =
-`# .env accidentally staged
-GITHUB_TOKEN=${gh}
-AWS_ACCESS_KEY_ID=${aws}
-OPENAI_API_KEY=sk-abcdef0123456789abcdef0123`;
+  $("scanbox").value = `# .env accidentally staged\nGITHUB_TOKEN=${gh}\nAWS_ACCESS_KEY_ID=${aws}\nOPENAI_API_KEY=sk-abcdef0123456789abcdef0123`;
   runScan();
 });
 
 /* ---- Branch guard (ported from src/commands/guard.ts) ---- */
 const PROTECTED = ["main","master","production"];
 const branchbox = $("branchbox");
-["main","develop","feat/export","production","release/1.2"].forEach((b) => {
-  const c = document.createElement("button");
-  c.className = "chip"; c.type = "button"; c.textContent = b;
-  c.addEventListener("click", () => { branchbox.value = b; runGuard(); });
-  $("branchOpts").appendChild(c);
-});
+["main","develop","feat/export","production","release/1.2"].forEach((b)=>{ const c=document.createElement("button"); c.className="chip"; c.type="button"; c.textContent=b; c.addEventListener("click",()=>{ branchbox.value=b; runGuard(); }); $("branchOpts").appendChild(c); });
 function runGuard(){
-  const branch = branchbox.value.trim();
-  const out = $("guardResult");
-  if (PROTECTED.includes(branch)){
-    out.className = "result bad";
-    out.innerHTML = `✗ refusing direct edits on protected branch '<b>${branch}</b>' (exit 1)` +
-      `<span class="li">→ create a feature branch first: git checkout -b feat/your-change</span>`;
-  } else {
-    out.className = "result ok";
-    out.textContent = `✓ branch '${branch || "(empty)"}' is not protected — ok to proceed.`;
-  }
+  const branch = branchbox.value.trim(); const o=$("guardResult");
+  if (PROTECTED.includes(branch)){ o.className="result bad"; o.innerHTML = `✗ refusing direct edits on protected branch '<b>${branch}</b>' (exit 1)<span class="li">→ create a feature branch first: git checkout -b feat/your-change</span>`; }
+  else { o.className="result ok"; o.textContent = `✓ branch '${branch || "(empty)"}' is not protected — ok to proceed.`; }
 }
 $("guardRun").addEventListener("click", runGuard);
 
 /* ---- Theme toggle ---- */
 const root = document.documentElement;
-$("themeToggle").addEventListener("click", () => {
-  const cur = root.getAttribute("data-theme")
-    || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
-  root.setAttribute("data-theme", cur === "dark" ? "light" : "dark");
+$("themeToggle").addEventListener("click", ()=>{
+  const cur = root.getAttribute("data-theme") || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+  root.setAttribute("data-theme", cur==="dark" ? "light" : "dark");
 });
 
 /* ---- init ---- */
-render();
-runScan();
-runGuard();
+render(); runScan(); runGuard();
 </script>
 </body>
 </html>

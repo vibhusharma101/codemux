@@ -4,6 +4,36 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres
 to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0] - 2026-07-24
+
+Router overhaul — a robust, multi-signal capability-ladder router.
+
+### Changed
+
+- **`codemux route` now estimates task complexity and routes on a capability
+  ladder** (Haiku 4.5 → Sonnet 5 → **Opus 4.8** → Fable 5) instead of a fixed
+  intent→model table. Model choice is driven by a 0–14 complexity score built from
+  many additive signals (complexity/simplicity terms, scope, multi-step structure,
+  repo size) plus risk flags — not a keyword lookup.
+- **Opus 4.8 added** to the ladder (previously absent); **Fable 5** is now reserved
+  for genuinely frontier-complexity work rather than any "refactor".
+- Effort levels extended to include `max`; Haiku correctly emits **no** `/effort`
+  directive (it has no effort control).
+
+### Added
+
+- **Risk flags & floors** — security/production-sensitive prompts floor at the
+  `complex` (Opus) tier; audits route to `read-only` mode.
+- **Confidence + escalation cascade** — low-confidence routes recommend the next
+  tier up ("escalate if the agent stalls / the change is larger than estimated").
+- **Parallel-agent recommendation** — multi-agent work emits `/agents N`, scaled by
+  files touched, independent steps, and scope.
+- Config schema **v2**: overridable tier models/efforts, complexity thresholds,
+  `riskFloor`, and `escalateBelowConfidence`.
+- Interactive explainer rewritten around the new engine (complexity meter, tier
+  ladder, risk pills, confidence bar, escalation), ported line-for-line and
+  parity-checked against the compiled router.
+
 ## [0.1.0] - 2026-07-24
 
 Initial release — the full v1 CLI: routing plus pre/post guardrails.
@@ -32,4 +62,5 @@ Initial release — the full v1 CLI: routing plus pre/post guardrails.
 - Implemented on Node + TypeScript rather than Bun (per PLAN.md), and the generated
   directory is `.codemux/` rather than `.middleware/`.
 
+[0.2.0]: https://github.com/vibhusharma101/codemux/releases/tag/v0.2.0
 [0.1.0]: https://github.com/vibhusharma101/codemux/releases/tag/v0.1.0
