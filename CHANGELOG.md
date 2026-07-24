@@ -4,6 +4,17 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres
 to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.5] - 2026-07-25
+
+### Fixed
+
+- **Definitive install method.** On Windows, npm global installs (both
+  `-g github:...` and `-g .`) *symlink* to the source rather than copy, so the
+  command breaks if that folder is removed. README now documents the method
+  verified end-to-end: clone (keep the folder), `npm install`, `npm link` — the
+  global `kodemux` links to the persistent clone. No compile step (build is
+  committed).
+
 ## [0.4.4] - 2026-07-25
 
 ### Fixed
@@ -197,6 +208,7 @@ Initial release — the full v1 CLI: routing plus pre/post guardrails.
 - Implemented on Node + TypeScript rather than Bun (per PLAN.md), and the generated
   directory is `.kodemux/` rather than `.middleware/`.
 
+[0.4.5]: https://github.com/vibhusharma101/kodemux/releases/tag/v0.4.5
 [0.4.4]: https://github.com/vibhusharma101/kodemux/releases/tag/v0.4.4
 [0.4.3]: https://github.com/vibhusharma101/kodemux/releases/tag/v0.4.3
 [0.4.2]: https://github.com/vibhusharma101/kodemux/releases/tag/v0.4.2
