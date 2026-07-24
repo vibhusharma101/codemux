@@ -299,7 +299,11 @@
               <div class="top"><span class="lbl">diff size (lines)</span><span class="val" id="diffVal">40</span></div>
               <input type="range" id="diff" min="0" max="1200" value="40" step="10" />
             </div>
-            <p class="note">Signals are additive: keywords, scope, multi-step structure, and repo size all move the complexity score.</p>
+            <label style="display:flex;align-items:center;gap:8px;font-family:var(--mono);font-size:12.5px;color:var(--ink-2);cursor:pointer;margin-bottom:8px;">
+              <input type="checkbox" id="critical" style="accent-color:var(--signal);width:15px;height:15px;" />
+              Simulate: the change touches a critical path (<code>src/auth/**</code>)
+            </label>
+            <p class="note">In the CLI these numbers are read automatically from <code>git diff</code>, and the critical-path flag fires on the real changed files — here you drive them by hand. All signals are additive.</p>
           </div>
 
           <div class="router-out">
@@ -453,7 +457,25 @@ const TIER_SPECS = {
   complex:  { model:MODELS.OPUS,   efforts:["high","xhigh"],   blurb:"hard, multi-file, autonomous work" },
   frontier: { model:MODELS.FABLE,  efforts:["xhigh","max"],    blurb:"most demanding reasoning & long-horizon work" },
 };
-const POLICY = { thresholds:{ standard:2, complex:5, frontier:9 }, riskFloor:"complex", escalateBelowConfidence:0.6 };
+const POLICY = { thresholds:{ standard:2, complex:5, frontier:9 }, riskFloor:"complex", escalateBelowConfidence:0.6,
+  criticalPaths:["**/auth/**","**/migrations/**","infra/**",".env*","**/secrets/**","**/payment*/**","**/billing/**","**/*.tf"] };
+
+/* glob matcher ported from src/glob.ts */
+function globToRegExp(pattern){
+  const pat = pattern.replace(/\\/g,"/"); let re=""; let i=0;
+  while (i<pat.length){
+    if (pat.startsWith("**/", i)){ re+="(?:.*/)?"; i+=3; continue; }
+    if (pat.startsWith("**", i)){ re+=".*"; i+=2; continue; }
+    const c=pat[i];
+    if (c==="*") re+="[^/]*";
+    else if (c==="?") re+="[^/]";
+    else if (".+^${}()|[]\\".includes(c)) re+="\\"+c;
+    else re+=c;
+    i++;
+  }
+  return new RegExp("(^|/)"+re, "i");
+}
+const matchesAny = (path, patterns) => patterns.some((p)=>globToRegExp(p).test(path.replace(/\\/g,"/")));
 const tierIndex = (t) => TIERS.indexOf(t);
 const TIER_HEAT = { simple:"var(--heat-low)", standard:"var(--heat-medium)", complex:"var(--heat-xhigh)", frontier:"var(--heat-max)" };
 const EFFORT_HEAT = { low:"var(--heat-low)", medium:"var(--heat-medium)", high:"var(--heat-high)", xhigh:"var(--heat-xhigh)", max:"var(--heat-max)" };
@@ -573,12 +595,16 @@ function recommendParallelism(a, mode, fileCount){
 function route(prompt, signals){
   const p = POLICY;
   const a = analyze(prompt, signals);
+  const risks = a.risks.slice();
+  const criticalHits = (signals && signals.paths && p.criticalPaths)
+    ? signals.paths.filter((path)=>matchesAny(path, p.criticalPaths)) : [];
+  if (criticalHits.length && !risks.includes("critical")) risks.push("critical");
   let tier = tierFromComplexity(a.complexity, p);
   if (INTENT_FLOOR[a.intent]) tier = maxTier(tier, INTENT_FLOOR[a.intent]);
-  if (a.risks.length) tier = maxTier(tier, p.riskFloor);
+  if (risks.length) tier = maxTier(tier, p.riskFloor);
   const spec = TIER_SPECS[tier];
   const upperBand = a.complexity >= (p.thresholds.frontier + p.thresholds.complex)/2;
-  const boost = a.risks.length>0 || upperBand || (a.multiStep && tierIndex(tier) >= tierIndex("complex"));
+  const boost = risks.length>0 || upperBand || (a.multiStep && tierIndex(tier) >= tierIndex("complex"));
   const effort = spec.efforts[boost?1:0] ?? spec.efforts[0];
   const mode = chooseMode(a, tier);
   const target = { model:spec.model, effort, mode };
@@ -591,9 +617,10 @@ function route(prompt, signals){
     escalation = { model:TIER_SPECS[next].model, tier:next, trigger:"if the agent stalls, reports low confidence, or the change proves larger than estimated" };
   }
   const reasons = a.reasons.slice();
-  reasons.unshift(`complexity ${a.complexity} + ${a.risks.length?`risk[${a.risks.join(",")}] `:""}intent ${a.intent} → ${tier} tier`);
+  if (criticalHits.length) reasons.push(`critical path touched (${criticalHits.slice(0,3).join(", ")}) → +risk`);
+  reasons.unshift(`complexity ${a.complexity} + ${risks.length?`risk[${risks.join(",")}] `:""}intent ${a.intent} → ${tier} tier`);
   if (mode === "multi-agent") reasons.push(`parallelizable work → fan out to ${parallelAgents} agents`);
-  return { intent:a.intent, complexity:a.complexity, tier, risks:a.risks, target, parallelAgents, confidence, escalation, directives:directivesFor(target, parallelAgents), reasons };
+  return { intent:a.intent, complexity:a.complexity, tier, risks, target, parallelAgents, confidence, escalation, directives:directivesFor(target, parallelAgents), reasons };
 }
 
 /* ---- Router UI ---- */
@@ -617,7 +644,9 @@ EXAMPLES.forEach((ex)=>{ const b=document.createElement("button"); b.className="
 function render(){
   const files = +filesEl.value, diff = +diffEl.value;
   $("filesVal").textContent = files; $("diffVal").textContent = diff;
-  const r = route(promptEl.value, { fileCount: files, diffLines: diff });
+  const sig = { fileCount: files, diffLines: diff };
+  if ($("critical").checked) sig.paths = ["src/auth/session.ts"];
+  const r = route(promptEl.value, sig);
 
   $("intentPill").textContent = r.intent;
   const risk = $("riskPill");
@@ -654,6 +683,7 @@ function render(){
 promptEl.addEventListener("input", render);
 filesEl.addEventListener("input", render);
 diffEl.addEventListener("input", render);
+$("critical").addEventListener("change", render);
 
 /* ---- Ladder table ---- */
 (function(){

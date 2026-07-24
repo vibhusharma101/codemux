@@ -13,6 +13,7 @@ import {
   type Tier,
 } from './constants/models.js';
 import { defaultRouterPolicy, type RouterPolicy } from './config.js';
+import { matchesAny } from './glob.js';
 
 export interface RouteTarget {
   model: ModelId;
@@ -170,17 +171,25 @@ export function route(
   const p = config?.router ?? defaultRouterPolicy();
   const a = analyze(prompt, signals);
 
+  // Merge prompt-derived risks with critical-path risk from the actual diff.
+  const risks: RiskFlag[] = [...a.risks];
+  const criticalHits =
+    signals.paths && p.criticalPaths?.length
+      ? signals.paths.filter((path) => matchesAny(path, p.criticalPaths))
+      : [];
+  if (criticalHits.length && !risks.includes('critical')) risks.push('critical');
+
   // Base tier from complexity, then apply intent + risk floors.
   let tier = tierFromComplexity(a.complexity, p);
   const floor = INTENT_FLOOR[a.intent];
   if (floor) tier = maxTier(tier, floor);
-  if (a.risks.length) tier = maxTier(tier, p.riskFloor);
+  if (risks.length) tier = maxTier(tier, p.riskFloor);
 
   const spec = p.tiers[tier];
 
   // Boosted effort at the top of a band or when risk is present.
   const upperBand = a.complexity >= (p.thresholds.frontier + p.thresholds.complex) / 2;
-  const boost = a.risks.length > 0 || upperBand || (a.multiStep && tierIndex(tier) >= tierIndex('complex'));
+  const boost = risks.length > 0 || upperBand || (a.multiStep && tierIndex(tier) >= tierIndex('complex'));
   const effort = spec.efforts[boost ? 1 : 0] ?? spec.efforts[0];
 
   const mode = chooseMode(a, tier);
@@ -203,8 +212,11 @@ export function route(
   }
 
   const reasons = [...a.reasons];
+  if (criticalHits.length) {
+    reasons.push(`critical path touched (${criticalHits.slice(0, 3).join(', ')}) → +risk`);
+  }
   reasons.unshift(
-    `complexity ${a.complexity} + ${a.risks.length ? `risk[${a.risks.join(',')}] ` : ''}intent ${a.intent} → ${tier} tier`,
+    `complexity ${a.complexity} + ${risks.length ? `risk[${risks.join(',')}] ` : ''}intent ${a.intent} → ${tier} tier`,
   );
   if (mode === 'multi-agent') {
     reasons.push(`parallelizable work → fan out to ${parallelAgents} agents`);
@@ -214,7 +226,7 @@ export function route(
     intent: a.intent,
     complexity: a.complexity,
     tier,
-    risks: a.risks,
+    risks,
     target,
     parallelAgents,
     confidence,

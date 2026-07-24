@@ -37,17 +37,24 @@ program
 
 program
   .command('route')
-  .description('Classify a prompt and emit model/effort/mode directives')
+  .description('Analyze a prompt (with auto git context) and emit routing directives')
   .argument('<prompt>', 'the task prompt to route')
-  .option('--files <n>', 'number of files the change is expected to touch')
-  .option('--diff-lines <n>', 'approximate diff size in lines')
+  .option('--files <n>', 'override auto-detected file count')
+  .option('--diff-lines <n>', 'override auto-detected diff size')
+  .option('--base <ref>', 'diff against a base ref (e.g. main) instead of the working tree')
+  .option('--no-git', 'disable automatic git context detection')
   .option('--json', 'emit machine-readable JSON', false)
-  .action((prompt: string, opts: { files?: string; diffLines?: string; json?: boolean }) => {
-    const out = runRoute(process.cwd(), prompt, opts);
-    if (out.exitCode === 0) console.log(out.text);
-    else console.error(out.text);
-    process.exitCode = out.exitCode;
-  });
+  .action(
+    (
+      prompt: string,
+      opts: { files?: string; diffLines?: string; base?: string; git?: boolean; json?: boolean },
+    ) => {
+      const out = runRoute(process.cwd(), prompt, opts);
+      if (out.exitCode === 0) console.log(out.text);
+      else console.error(out.text);
+      process.exitCode = out.exitCode;
+    },
+  );
 
 program
   .command('scan')

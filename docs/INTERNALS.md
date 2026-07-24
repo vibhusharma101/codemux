@@ -13,32 +13,36 @@ the code wins — file an issue.
 ## 1. Architecture at a glance
 
 ```
-prompt + repo signals (--files, --diff-lines)
-        │
-        ▼
-┌───────────────────────┐
-│  analyze()             │  src/classify.ts
-│  → Analysis object     │  pure function, no I/O, no network
-└───────────┬───────────┘
-            │ intent, complexity score, risk flags, scope, multi-step
-            ▼
-┌───────────────────────┐
-│  route()               │  src/router.ts
-│  → RouteResult object  │  applies POLICY from .codemux/config.json
-└───────────┬───────────┘
-            │ tier, model, effort, mode, parallelAgents, confidence, escalation
-            ▼
-┌───────────────────────┐
-│  runRoute() / CLI      │  src/commands/route.ts, src/cli.ts
-│  → text or --json      │  side-effect-free core + a thin console wrapper
-└───────────────────────┘
+prompt
+   │        ┌─────────────────────────────┐
+   │        │  repoContext()  src/git.ts  │  runs `git diff` → changed files,
+   │        │  → RepoContext              │  diff lines, and changed paths
+   │        └──────────────┬──────────────┘
+   ▼                       ▼
+┌───────────────────────────────────────┐
+│  analyze()             src/classify.ts │  pure function, no I/O, no network
+│  → Analysis object                     │  intent, complexity, risk, scope, steps
+└───────────────────┬───────────────────┘
+                    ▼
+┌───────────────────────────────────────┐
+│  route()               src/router.ts   │  applies POLICY from .codemux/config.json
+│  → RouteResult object                  │  + critical-path check on changed paths
+└───────────────────┬───────────────────┘
+                    │ tier, model, effort, mode, parallelAgents, confidence, escalation
+                    ▼
+┌───────────────────────────────────────┐
+│  runRoute() / CLI  src/commands/route.ts, src/cli.ts
+│  → text or --json                      │  reads git, then calls the pure core
+└───────────────────────────────────────┘
 ```
 
-Everything up to the CLI wrapper is **pure functions**: same input always produces
-the same output, nothing touches the filesystem or network except loading the
-optional config file. That's what makes the 51-test suite exhaustive and what
-makes the interactive web explainer (`docs/index.html`) able to run the *exact
-same logic* client-side with zero backend.
+`analyze()` and `route()` are **pure functions** — same inputs, same output, no I/O.
+The *only* impurity is `repoContext()` (it shells out to `git`) and loading the
+config file, both confined to the CLI layer and both skippable (`--no-git`). That
+purity is what makes the 63-test suite exhaustive and lets the interactive web
+explainer (`docs/index.html`) run the *exact same routing logic* client-side with
+zero backend — it just can't run git, so it accepts the file/diff/path signals
+directly instead of deriving them.
 
 ---
 
@@ -142,10 +146,11 @@ independent signals found in the prompt text and repo signals:
 | Wide scope | **+2** | `entire`, `whole`, `across the`, `codebase`, `everywhere`, `system-wide` |
 | Investigation/uncertainty | **+1 each, capped +2** | `investigate`, `root cause`, `diagnose`, `unclear`, `flaky`, `intermittent` |
 | Multi-step structure | **+1 per connector, capped +3** | `"and then"`, `"; "`, `"also"`, `"followed by"` |
-| Files touched | **+2 at ≥10, +4 at ≥20, −1 at ≤1** | from `--files` |
-| Diff size | **+2 at ≥300, +3 at ≥800, −1 at ≤20** | from `--diff-lines` |
+| Files touched | **+2 at ≥10, +4 at ≥20, −1 at ≤1** | auto from `git diff` (or `--files`) |
+| Diff size | **+2 at ≥300, +3 at ≥800, −1 at ≤20** | auto from `git diff` (or `--diff-lines`) |
 
-The raw total is clamped to `[0, 14]`. This is why "add error handling" — the
+The files-touched and diff-size numbers are **read from the repo automatically**
+— see §4.5. The raw total is clamped to `[0, 14]`. This is why "add error handling" — the
 canonical example of a prompt that keyword-matching gets wrong — routes
 correctly either way: on its own it scores 0 (no signal either direction, so it
 lands at the cheapest tier its *intent floor* allows), but "add error handling
@@ -167,6 +172,37 @@ router, not the score.
 Every point added or subtracted pushes a human-readable string onto `reasons`.
 This is what powers the `why:` section of `codemux route` output and the "why
 this route" panel in the web explainer — the estimate is never a black box.
+
+### 4.5 Real repo context — `repoContext()` and critical paths
+
+The router doesn't only read the prompt string. `src/commands/route.ts` calls
+`repoContext()` (`src/git.ts`) before routing, which runs `git diff` and returns:
+
+```ts
+interface RepoContext {
+  fileCount: number;   // real count of changed files (working tree, or a base…HEAD range)
+  diffLines: number;   // real added+deleted line count, from `git diff --numstat`
+  paths: string[];     // the actual changed file paths
+}
+```
+
+Those numbers feed the complexity signals in §4.2 — so "clean up the router code"
+scores differently when 2 files changed vs when 40 did, *without you telling it*.
+`--files` / `--diff-lines` override the auto-detected values; `--base <ref>` diffs
+a whole branch range instead of the working tree; `--no-git` turns detection off.
+If the directory isn't a git repo (or has no commits), `repoContext()` returns
+`null` and the router falls back to prompt-only.
+
+**Critical paths.** The `paths` list is matched (in `route()`) against
+`policy.criticalPaths` — a set of glob patterns for high-blast-radius locations
+(`**/auth/**`, `**/migrations/**`, `infra/**`, `.env*`, `**/secrets/**`,
+`**/payment*/**`, `**/*.tf`, …). A match raises a **`critical` risk flag**, which
+— like security/production risk — floors the tier. This is how a change described
+only as "tweak a default value" still routes to Opus if it lands in
+`src/auth/session.ts`: the *diff* reveals what the *prompt* didn't. Matching uses
+a small dependency-free glob engine in `src/glob.ts` (supports `**`, `*`, `?`,
+anchored to path-segment boundaries so `auth/` matches `src/auth/x` but not
+`src/myauth/x`).
 
 ---
 
@@ -192,9 +228,10 @@ never down:
 - **Intent floor** (`INTENT_FLOOR` in `router.ts`): `feature`, `bugfix`, and
   `refactor` never go below `standard` — a "simple" complexity score alone
   can't send real code work to Haiku. `architecture` floors at `complex`.
-- **Risk floor** (`policy.riskFloor`, default `complex`): any security or
-  production risk flag guarantees at least the `complex` (Opus) tier,
-  regardless of how simple the wording looks.
+- **Risk floor** (`policy.riskFloor`, default `complex`): any risk flag —
+  `security`, `production`, or `critical` (a critical-path hit from the diff,
+  §4.5) — guarantees at least the `complex` (Opus) tier, regardless of how
+  simple the wording looks.
 
 ```ts
 let tier = tierFromComplexity(a.complexity, policy);
@@ -314,8 +351,10 @@ everywhere, instead of each command re-implementing it.
 | Question | File |
 |---|---|
 | "Why did this prompt get this model?" | `src/classify.ts` (`analyze`) + `src/router.ts` (`route`) |
+| "How does it read the repo?" | `src/git.ts` (`repoContext`, `parseNumstat`) |
+| "How are critical paths matched?" | `src/glob.ts` + `router.criticalPaths` in `src/config.ts` |
 | "What models/efforts exist?" | `src/constants/models.ts` |
 | "What can I override in config?" | `src/config.ts` |
 | "How does the CLI format the answer?" | `src/commands/route.ts` |
-| "Does the web page match the CLI exactly?" | `docs/index.html` — the `<script>` is a line-for-line port of the three files above; see the PR history for parity tests |
-| "What's tested?" | `test/classify.test.ts`, `test/router.test.ts`, `test/route-command.test.ts` (51 tests total across the whole CLI) |
+| "Does the web page match the CLI exactly?" | `docs/index.html` — the `<script>` is a line-for-line port of the routing logic (it can't run git, so it takes the signals directly) |
+| "What's tested?" | `test/*.test.ts` — 63 tests across classify, router, config, glob, git, scan, guard, hooks, init |
