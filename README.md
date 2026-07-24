@@ -12,7 +12,8 @@ generation.
 ```
 
 Built as a dependency-light **Node + TypeScript** CLI. See [`PLAN.md`](./PLAN.md)
-for the full product spec.
+for the full product spec and [`docs/INTERNALS.md`](./docs/INTERNALS.md) for how
+the router actually works under the hood.
 
 > 🌐 **[Try the interactive explainer →](https://vibhusharma101.github.io/codemux/)** —
 > drive the real router, secrets scan, and branch guard in your browser. No install.
