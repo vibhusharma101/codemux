@@ -32,18 +32,26 @@ overridable**, and wraps every change in secrets / branch / test guardrails.
 
 ## Install
 
-**Install straight from GitHub (recommended)** — one command, builds itself,
-works on macOS / Linux / Windows and inside the Claude Code terminal. Requires
-**Node ≥ 20**:
+**Clone & install (recommended — works everywhere, incl. Windows & the Claude
+Code terminal).** The compiled build is committed, so there is **no compile
+step**. Requires **Node ≥ 20**:
 
 ```sh
-npm install -g github:vibhusharma101/kodemux
+git clone https://github.com/vibhusharma101/kodemux.git
+cd kodemux
+npm install -g .        # puts a global `kodemux` command on your PATH
 kodemux --version
 ```
 
-That clones the repo, compiles it (via the `prepare` script), and puts a global
-`kodemux` command on your PATH. Update later with the same command; remove with
-`npm rm -g kodemux`.
+Update later with `git pull` + `npm install -g .`; remove with `npm rm -g kodemux`.
+
+**One-liner from GitHub (macOS / Linux).** Convenient, but skip it on Windows —
+npm's global git-install can leave a broken symlink there (use the clone method
+above instead):
+
+```sh
+npm install -g github:vibhusharma101/kodemux
+```
 
 **From npm (once published):**
 

@@ -4,6 +4,17 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres
 to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.4] - 2026-07-25
+
+### Fixed
+
+- **Install docs corrected to the method that actually works everywhere.**
+  `npm install -g github:...` leaves a broken symlink on Windows (npm points the
+  global package at a temp git-clone dir that is then deleted). README now leads
+  with the reliable clone + `npm install -g .` method — no compile step, since the
+  build is committed — and marks the one-liner as macOS/Linux-only. Verified
+  end-to-end on Windows.
+
 ## [0.4.3] - 2026-07-25
 
 ### Fixed
@@ -186,6 +197,7 @@ Initial release — the full v1 CLI: routing plus pre/post guardrails.
 - Implemented on Node + TypeScript rather than Bun (per PLAN.md), and the generated
   directory is `.kodemux/` rather than `.middleware/`.
 
+[0.4.4]: https://github.com/vibhusharma101/kodemux/releases/tag/v0.4.4
 [0.4.3]: https://github.com/vibhusharma101/kodemux/releases/tag/v0.4.3
 [0.4.2]: https://github.com/vibhusharma101/kodemux/releases/tag/v0.4.2
 [0.4.1]: https://github.com/vibhusharma101/kodemux/releases/tag/v0.4.1
