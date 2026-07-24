@@ -4,6 +4,20 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres
 to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.6] - 2026-07-25
+
+### Added
+
+- **"Getting started (fresh machine)" section** at the top of the README — a
+  single copy-paste walkthrough (clone → `npm install` → `npm link` → use it in
+  your own project) for a brand-new user, verified end-to-end on Windows, macOS,
+  Linux, and inside the Claude Code terminal.
+
+### Fixed
+
+- Removed a stale reference to the `prepare` script (removed in v0.4.3) from the
+  "From source" install instructions.
+
 ## [0.4.5] - 2026-07-25
 
 ### Fixed
@@ -208,6 +222,7 @@ Initial release — the full v1 CLI: routing plus pre/post guardrails.
 - Implemented on Node + TypeScript rather than Bun (per PLAN.md), and the generated
   directory is `.kodemux/` rather than `.middleware/`.
 
+[0.4.6]: https://github.com/vibhusharma101/kodemux/releases/tag/v0.4.6
 [0.4.5]: https://github.com/vibhusharma101/kodemux/releases/tag/v0.4.5
 [0.4.4]: https://github.com/vibhusharma101/kodemux/releases/tag/v0.4.4
 [0.4.3]: https://github.com/vibhusharma101/kodemux/releases/tag/v0.4.3

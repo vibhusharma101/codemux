@@ -20,6 +20,53 @@ the router actually works under the hood.
 
 ---
 
+## Getting started (fresh machine)
+
+New here? This is the fastest path from a clean checkout to a working `kodemux`
+in **any** of your repos — verified end-to-end on Windows, macOS, and Linux, and
+inside the Claude Code terminal. Requires **Node ≥ 20** and **git**.
+
+```sh
+# 1. Clone kodemux somewhere you'll keep — the global command links back to it
+git clone https://github.com/vibhusharma101/kodemux.git
+cd kodemux
+
+# 2. Install runtime deps (no build step — the compiled dist/ is committed)
+npm install
+
+# 3. Link it globally
+npm link
+
+# 4. Confirm it's on your PATH
+kodemux --version
+```
+
+Now go use it **in the project you actually want to route tasks for** — it does
+not need to run from inside the kodemux folder:
+
+```sh
+cd /path/to/your-project
+kodemux init                               # detects your stack, scaffolds .kodemux/
+kodemux route "add a dark mode toggle"     # → model / effort / mode, with reasoning
+kodemux guard                              # refuse edits on a protected branch
+kodemux scan                               # secrets scan of your changed files
+```
+
+`kodemux route` reads your actual `git diff` automatically, so results reflect
+what's really changed — not just the words in your prompt.
+
+**Updating later:** `git pull` inside the cloned kodemux folder — no reinstall
+needed. **Removing:** `npm rm -g kodemux`.
+
+**Don't delete the cloned folder** — `npm link` points the global command back at
+it; see [Install](#install) below for the platform-specific detail on why (a
+Windows-specific npm quirk) and the alternatives (npm/curl/from-source).
+
+**Want the AI-assisted step to fire too?** It's optional and needs no separate
+setup — see [Credentials](#credentials-only-needed-for-ai-assist) below.
+
+---
+
 ## Why
 
 AI tools expose a large matrix of models (Fable 5, Opus 4.8, Sonnet 5, Haiku 4.5),
@@ -75,8 +122,9 @@ Clones to `~/.kodemux-src`, builds, and links the binary into `~/.local/bin`
 
 ```sh
 git clone https://github.com/vibhusharma101/kodemux.git
-cd kodemux && npm install    # `prepare` builds dist/ automatically
+cd kodemux && npm install    # dist/ is already built and committed
 node dist/cli.js --help
+# after editing src/, rebuild with: npm run build
 ```
 
 ### Credentials (only needed for AI-assist)
