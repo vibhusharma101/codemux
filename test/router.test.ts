@@ -83,6 +83,18 @@ test('a large, wide-scope task fans out to multiple parallel agents', () => {
   assert.ok(r.directives.includes(`/agents ${r.parallelAgents}`));
 });
 
+test('touching a critical path floors the tier even with innocuous wording', () => {
+  // wording alone would route to `simple`/`standard`; the auth path forces up.
+  const r = route('tweak a default value', undefined, { paths: ['src/auth/session.ts'] });
+  assert.ok(r.risks.includes('critical'));
+  assert.equal(r.target.model, MODELS.OPUS_4_8); // risk floor = complex
+});
+
+test('a non-critical path adds no risk', () => {
+  const r = route('tweak a default value', undefined, { paths: ['src/utils/format.ts'] });
+  assert.ok(!r.risks.includes('critical'));
+});
+
 test('directivesFor omits /effort when the model has none', () => {
   const withEffort = directivesFor({ model: MODELS.SONNET_5, effort: 'high', mode: 'plan' });
   assert.deepEqual(withEffort, ['/model claude-sonnet-5', '/effort high', '/plan']);

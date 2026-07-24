@@ -32,10 +32,16 @@ export interface RouterPolicy {
    * below `standard` routes to `simple`.
    */
   thresholds: { standard: number; complex: number; frontier: number };
-  /** Minimum tier when any risk flag (security/production) is present. */
+  /** Minimum tier when any risk flag (security/production/critical) is present. */
   riskFloor: Tier;
   /** Escalate (recommend the next tier up) when confidence is below this. */
   escalateBelowConfidence: number;
+  /**
+   * Glob patterns for high-blast-radius paths. A change touching any of these
+   * raises a `critical` risk flag and floors the tier — even if the prompt text
+   * never mentions it.
+   */
+  criticalPaths: string[];
 }
 
 export interface HookConfig {
@@ -68,6 +74,16 @@ export function defaultRouterPolicy(): RouterPolicy {
     thresholds: { standard: 2, complex: 5, frontier: 9 },
     riskFloor: 'complex',
     escalateBelowConfidence: 0.6,
+    criticalPaths: [
+      '**/auth/**',
+      '**/migrations/**',
+      'infra/**',
+      '.env*',
+      '**/secrets/**',
+      '**/payment*/**',
+      '**/billing/**',
+      '**/*.tf',
+    ],
   };
 }
 
@@ -120,6 +136,7 @@ export function loadConfig(cwd: string): CodemuxConfig | null {
       riskFloor: pr.riskFloor ?? base.router.riskFloor,
       escalateBelowConfidence:
         pr.escalateBelowConfidence ?? base.router.escalateBelowConfidence,
+      criticalPaths: pr.criticalPaths ?? base.router.criticalPaths,
     },
     hooks: {
       pre: { ...base.hooks.pre, ...(parsed.hooks?.pre ?? {}) },

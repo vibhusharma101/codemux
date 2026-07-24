@@ -20,6 +20,7 @@ test('defaultConfig builds the capability ladder and protects main', () => {
   assert.equal(cfg.router.tiers.frontier.model, 'claude-fable-5');
   assert.equal(cfg.router.tiers.simple.efforts[0], null); // Haiku has no effort
   assert.equal(cfg.router.riskFloor, 'complex');
+  assert.ok(cfg.router.criticalPaths.includes('**/auth/**'));
   assert.ok(cfg.hooks.pre.branchProtection.includes('main'));
 });
 

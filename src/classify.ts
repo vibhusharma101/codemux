@@ -17,9 +17,11 @@ export interface Signals {
   fileCount?: number;
   /** Approximate diff size in lines. */
   diffLines?: number;
+  /** Repo-relative paths of changed files (for critical-path detection). */
+  paths?: string[];
 }
 
-export type RiskFlag = 'security' | 'production';
+export type RiskFlag = 'security' | 'production' | 'critical';
 
 export interface Analysis {
   intent: Intent;

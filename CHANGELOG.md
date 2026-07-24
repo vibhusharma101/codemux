@@ -4,6 +4,30 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres
 to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] - 2026-07-24
+
+Real repo context — the router now reads the actual diff, not just the prompt.
+
+### Added
+
+- **Automatic git context.** `codemux route` now runs `git diff` to derive the
+  real number of changed files and diff lines from the working tree (or a
+  `--base <ref>` range), instead of relying on manually supplied `--files` /
+  `--diff-lines`. Those flags still work as overrides; `--no-git` disables
+  detection.
+- **Critical-path detection.** A change touching a high-blast-radius path (auth,
+  migrations, infra, `.env*`, secrets, payments/billing, `*.tf`) raises a new
+  `critical` risk flag and floors the tier — *even when the prompt text never
+  mentions it*. Patterns are configurable via `router.criticalPaths` (glob).
+- `src/glob.ts` — a dependency-free glob matcher (`**`, `*`, `?`) for path rules.
+- `git.parseNumstat()` / `git.repoContext()` — tested diff-stat helpers.
+
+### Changed
+
+- Config schema adds `router.criticalPaths`.
+- `route --json` now includes a `detected` object (files, diff lines, paths, base).
+- Explainer gains a "touches a critical path" toggle demonstrating the new flag.
+
 ## [0.2.0] - 2026-07-24
 
 Router overhaul — a robust, multi-signal capability-ladder router.
@@ -62,5 +86,6 @@ Initial release — the full v1 CLI: routing plus pre/post guardrails.
 - Implemented on Node + TypeScript rather than Bun (per PLAN.md), and the generated
   directory is `.codemux/` rather than `.middleware/`.
 
+[0.3.0]: https://github.com/vibhusharma101/codemux/releases/tag/v0.3.0
 [0.2.0]: https://github.com/vibhusharma101/codemux/releases/tag/v0.2.0
 [0.1.0]: https://github.com/vibhusharma101/codemux/releases/tag/v0.1.0

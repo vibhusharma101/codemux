@@ -77,7 +77,7 @@ codemux post                              # plan scoped format/lint/test
 | Command | Purpose |
 | --- | --- |
 | `codemux init [--force]` | Detect the repo stack and scaffold `.codemux/` (config + synthesized `CLAUDE.md`). |
-| `codemux route <prompt> [--files n] [--diff-lines n] [--json]` | Estimate complexity, pick a tier on the capability ladder, and emit `/model` · `/effort` · `/mode` (· `/agents N`) directives with a confidence + escalation. |
+| `codemux route <prompt> [--files n] [--diff-lines n] [--base ref] [--no-git] [--json]` | Read git context, estimate complexity, pick a tier on the capability ladder, and emit `/model` · `/effort` · `/mode` (· `/agents N`) directives with a confidence + escalation. |
 | `codemux guard` | **Pre-hook.** Refuse direct edits on a protected branch. Exit 1 to block. |
 | `codemux scan [--json]` | **Pre-hook.** Scan changed files for secret-shaped strings. Exit 1 on a hit. |
 | `codemux post [--run] [--json]` | **Post-hook.** Plan (dry-run) or run scoped format/lint/test for changed files. |
@@ -92,9 +92,11 @@ deterministic rule engine (no LLM call): free, instant, testable, reproducible.
 
 1. **Estimate complexity (0–14)** from many additive signals — not a keyword→model
    lookup. Complexity terms (`distributed`, `concurrency`, `optimize`, `migrate`…),
-   scope (`entire`, `across the codebase`), multi-step structure, and repo size
-   (`--files` / `--diff-lines`) all move the score; simplicity terms (`typo`,
-   `rename`, `lint`…) move it down.
+   scope (`entire`, `across the codebase`), multi-step structure, and **real repo
+   size read automatically from `git diff`** (files changed + diff lines) all move
+   the score; simplicity terms (`typo`, `rename`, `lint`…) move it down. `--files` /
+   `--diff-lines` override the auto-detected numbers, `--base <ref>` diffs a branch
+   range, and `--no-git` disables detection.
 2. **Pick the tier** by threshold, then apply floors:
 
    | Tier | Model | Reaches at | Effort | Best for |
@@ -104,9 +106,15 @@ deterministic rule engine (no LLM call): free, instant, testable, reproducible.
    | `complex` | `claude-opus-4-8` | ≥ 5 | high → xhigh | hard, multi-file, autonomous work |
    | `frontier` | `claude-fable-5` | ≥ 9 | xhigh → max | most demanding reasoning & long-horizon work |
 
-   *Floors:* any **security/production** risk → `complex` (Opus) minimum ·
-   `architecture` intent → `complex` · features/fixes/refactors never route below
-   `standard`. Haiku takes no `/effort` directive.
+   *Floors:* any **security / production / critical-path** risk → `complex` (Opus)
+   minimum · `architecture` intent → `complex` · features/fixes/refactors never
+   route below `standard`. Haiku takes no `/effort` directive.
+
+   A **critical-path** flag is raised when the *actual diff* touches a
+   high-blast-radius location — auth, migrations, infra, `.env*`, secrets,
+   payments, `*.tf` — **even if the prompt never mentions it** (a change described
+   as "tweak a default value" still routes to Opus if it lands in `src/auth/`).
+   Patterns are configurable via `router.criticalPaths`.
 3. **Choose the mode & parallelism** — audits are `read-only`; large, wide-scope or
    multi-step work at the `complex`+ tiers becomes `multi-agent` with a recommended
    **number of parallel agents** (`/agents N`, scaled by files/steps/scope).
@@ -157,8 +165,9 @@ values fall back to defaults, so you can hand-edit a partial config.
       "complex": { "model": "claude-opus-4-8", "efforts": ["high", "xhigh"] }
     },
     "thresholds": { "standard": 2, "complex": 5, "frontier": 9 },
-    "riskFloor": "complex",           // min tier when security/production risk is present
-    "escalateBelowConfidence": 0.6    // cascade to the next tier below this confidence
+    "riskFloor": "complex",           // min tier when any risk flag is present
+    "escalateBelowConfidence": 0.6,   // cascade to the next tier below this confidence
+    "criticalPaths": ["**/auth/**", "**/migrations/**", "infra/**", ".env*"]
   },
   "hooks": {
     "pre":  { "secretsScan": true, "branchProtection": ["main", "master", "production"] },

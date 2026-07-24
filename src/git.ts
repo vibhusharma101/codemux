@@ -42,3 +42,62 @@ export function changedFiles(cwd: string): ChangedFile[] {
 export function currentBranch(cwd: string): string {
   return runGit(cwd, ['rev-parse', '--abbrev-ref', 'HEAD']).trim();
 }
+
+export interface DiffStats {
+  fileCount: number;
+  diffLines: number;
+}
+
+/**
+ * Parse `git diff --numstat` output (`<added>\t<deleted>\t<path>` per line).
+ * Binary files render as `-\t-\t<path>` and contribute to fileCount only. Pure.
+ */
+export function parseNumstat(output: string): DiffStats {
+  let fileCount = 0;
+  let diffLines = 0;
+  for (const raw of output.split('\n')) {
+    const line = raw.trim();
+    if (!line) continue;
+    const parts = line.split('\t');
+    if (parts.length < 3) continue;
+    fileCount++;
+    const added = Number(parts[0]);
+    const deleted = Number(parts[1]);
+    if (!Number.isNaN(added)) diffLines += added;
+    if (!Number.isNaN(deleted)) diffLines += deleted;
+  }
+  return { fileCount, diffLines };
+}
+
+export interface RepoContext {
+  fileCount: number;
+  diffLines: number;
+  /** Repo-relative paths of changed files (for critical-path detection). */
+  paths: string[];
+}
+
+/**
+ * Best-effort repo change context. With no `base`, reports the working-tree +
+ * staged changes vs HEAD (plus untracked files). With a `base` ref, reports the
+ * whole `base...HEAD` range (the "review this branch" case). Returns `null` when
+ * the directory isn't a git repo or has no commits yet — the router then falls
+ * back to any manually supplied signals.
+ */
+export function repoContext(cwd: string, base?: string): RepoContext | null {
+  try {
+    if (base) {
+      const paths = runGit(cwd, ['diff', '--name-only', `${base}...HEAD`])
+        .split('\n')
+        .map((s) => s.trim())
+        .filter(Boolean);
+      const stats = parseNumstat(runGit(cwd, ['diff', '--numstat', `${base}...HEAD`]));
+      return { fileCount: paths.length, diffLines: stats.diffLines, paths };
+    }
+    const paths = changedFiles(cwd).map((f) => f.path);
+    const stats = parseNumstat(runGit(cwd, ['diff', '--numstat', 'HEAD']));
+    // porcelain path count includes untracked files that numstat misses
+    return { fileCount: Math.max(paths.length, stats.fileCount), diffLines: stats.diffLines, paths };
+  } catch {
+    return null;
+  }
+}
