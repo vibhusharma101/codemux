@@ -1,5 +1,5 @@
 /**
- * `codemux scan` — pre-hook secrets scan of changed files.
+ * `kodemux scan` — pre-hook secrets scan of changed files.
  */
 import { join } from 'node:path';
 import { changedFiles } from '../git.js';
@@ -32,11 +32,11 @@ export function runScan(cwd: string, opts: ScanOptions = {}): ScanOutput {
   }
 
   if (findings.length === 0) {
-    return { text: 'codemux scan: no secrets found in changed files.', exitCode: 0, findings };
+    return { text: 'kodemux scan: no secrets found in changed files.', exitCode: 0, findings };
   }
 
   const lines = [
-    `codemux scan: ${findings.length} potential secret(s) found:`,
+    `kodemux scan: ${findings.length} potential secret(s) found:`,
     ...findings.map((f) => `  ${f.file}:${f.line}  [${f.rule}]  ${f.match}`),
     '',
     'Remove or vault these before handing off to an agent.',

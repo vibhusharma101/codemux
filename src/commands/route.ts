@@ -1,5 +1,5 @@
 /**
- * `codemux route "<prompt>"` — analyze a prompt and emit routing directives.
+ * `kodemux route "<prompt>"` — analyze a prompt and emit routing directives.
  *
  * Repo context (files changed, diff size, critical-path hits) is read
  * automatically from git; `--files` / `--diff-lines` override the auto-detected
@@ -35,7 +35,7 @@ export function runRoute(
   opts: RouteCommandOptions = {},
 ): RouteCommandOutput {
   if (!prompt || !prompt.trim()) {
-    return { text: 'codemux route: a prompt is required', exitCode: 1 };
+    return { text: 'kodemux route: a prompt is required', exitCode: 1 };
   }
 
   const config = loadConfig(cwd) ?? undefined;

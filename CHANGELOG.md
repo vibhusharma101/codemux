@@ -4,13 +4,22 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres
 to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.1] - 2026-07-24
+
+### Changed
+
+- **Renamed the project from `codemux` to `kodemux`.** The package/CLI is now
+  `kodemux`, the generated config directory is `.kodemux/`, and the repo lives at
+  `github.com/vibhusharma101/kodemux`. No behavior changes beyond the name — if you
+  scaffolded a `.codemux/` directory with a prior version, rename it to `.kodemux/`.
+
 ## [0.3.0] - 2026-07-24
 
 Real repo context — the router now reads the actual diff, not just the prompt.
 
 ### Added
 
-- **Automatic git context.** `codemux route` now runs `git diff` to derive the
+- **Automatic git context.** `kodemux route` now runs `git diff` to derive the
   real number of changed files and diff lines from the working tree (or a
   `--base <ref>` range), instead of relying on manually supplied `--files` /
   `--diff-lines`. Those flags still work as overrides; `--no-git` disables
@@ -34,7 +43,7 @@ Router overhaul — a robust, multi-signal capability-ladder router.
 
 ### Changed
 
-- **`codemux route` now estimates task complexity and routes on a capability
+- **`kodemux route` now estimates task complexity and routes on a capability
   ladder** (Haiku 4.5 → Sonnet 5 → **Opus 4.8** → Fable 5) instead of a fixed
   intent→model table. Model choice is driven by a 0–14 complexity score built from
   many additive signals (complexity/simplicity terms, scope, multi-step structure,
@@ -64,18 +73,18 @@ Initial release — the full v1 CLI: routing plus pre/post guardrails.
 
 ### Added
 
-- **CLI core** (`codemux`) on Node + TypeScript, compiled to `dist/` and exposed
+- **CLI core** (`kodemux`) on Node + TypeScript, compiled to `dist/` and exposed
   as a `bin`.
-- **`codemux init`** — marker-based stack detection (node, typescript, python, go,
-  rust, docker, monorepo) and idempotent `.codemux/` scaffold (config + synthesized
+- **`kodemux init`** — marker-based stack detection (node, typescript, python, go,
+  rust, docker, monorepo) and idempotent `.kodemux/` scaffold (config + synthesized
   `CLAUDE.md`); `--force` to overwrite.
-- **`codemux route <prompt>`** — deterministic keyword + repo-signal classifier that
+- **`kodemux route <prompt>`** — deterministic keyword + repo-signal classifier that
   maps a prompt to an intent and emits `/model` · `/effort` · `/plan`|`/mode`
   directives from an overridable router matrix. `--files`, `--diff-lines`, `--json`.
-- **`codemux guard`** — pre-hook branch protection (configurable protected list).
-- **`codemux scan`** — pre-hook secrets scanner (GitHub PAT/classic, OpenAI, AWS,
+- **`kodemux guard`** — pre-hook branch protection (configurable protected list).
+- **`kodemux scan`** — pre-hook secrets scanner (GitHub PAT/classic, OpenAI, AWS,
   Slack, Google API key, PEM private key) with masked findings.
-- **`codemux post`** — post-hook scoped format/lint/test planner (dry-run by default,
+- **`kodemux post`** — post-hook scoped format/lint/test planner (dry-run by default,
   `--run` to execute).
 - **Config loader** with defaults + partial-config merging.
 - **43 unit tests** (node:test) and CI on Node 20 & 22.
@@ -84,8 +93,9 @@ Initial release — the full v1 CLI: routing plus pre/post guardrails.
 ### Notes
 
 - Implemented on Node + TypeScript rather than Bun (per PLAN.md), and the generated
-  directory is `.codemux/` rather than `.middleware/`.
+  directory is `.kodemux/` rather than `.middleware/`.
 
-[0.3.0]: https://github.com/vibhusharma101/codemux/releases/tag/v0.3.0
-[0.2.0]: https://github.com/vibhusharma101/codemux/releases/tag/v0.2.0
-[0.1.0]: https://github.com/vibhusharma101/codemux/releases/tag/v0.1.0
+[0.3.1]: https://github.com/vibhusharma101/kodemux/releases/tag/v0.3.1
+[0.3.0]: https://github.com/vibhusharma101/kodemux/releases/tag/v0.3.0
+[0.2.0]: https://github.com/vibhusharma101/kodemux/releases/tag/v0.2.0
+[0.1.0]: https://github.com/vibhusharma101/kodemux/releases/tag/v0.1.0

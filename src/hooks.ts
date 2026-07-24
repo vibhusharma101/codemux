@@ -4,7 +4,7 @@
  * execution is a separate opt-in step.
  */
 import { extname } from 'node:path';
-import type { CodemuxConfig } from './config.js';
+import type { KodemuxConfig } from './config.js';
 
 export interface PostStep {
   kind: 'format' | 'lint' | 'test';
@@ -43,7 +43,7 @@ function langFor(file: string): LangTools | undefined {
  * format/lint steps for the touched files plus a single test step per language,
  * gated by the config's post-hook flags.
  */
-export function planPost(files: string[], config: CodemuxConfig): PostStep[] {
+export function planPost(files: string[], config: KodemuxConfig): PostStep[] {
   const post = config.hooks.post;
   const byLang = new Map<LangTools, string[]>();
   for (const f of files) {

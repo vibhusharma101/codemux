@@ -6,13 +6,13 @@ import { init } from '../src/commands/init.js';
 import { loadConfig } from '../src/config.js';
 import { tempRepo } from './helpers.js';
 
-test('init scaffolds .codemux with config and CLAUDE.md', () => {
+test('init scaffolds .kodemux with config and CLAUDE.md', () => {
   const { dir, cleanup } = tempRepo();
   try {
     writeFileSync(join(dir, 'package.json'), '{}');
     const result = init(dir);
-    assert.ok(existsSync(join(dir, '.codemux', 'config.json')));
-    assert.ok(existsSync(join(dir, '.codemux', 'CLAUDE.md')));
+    assert.ok(existsSync(join(dir, '.kodemux', 'config.json')));
+    assert.ok(existsSync(join(dir, '.kodemux', 'CLAUDE.md')));
     assert.ok(result.created.some((f) => f.endsWith('config.json')));
     assert.ok(result.config.stack.includes('node'));
 

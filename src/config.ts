@@ -1,5 +1,5 @@
 /**
- * Config schema, defaults, and loader for `.codemux/config.json`.
+ * Config schema, defaults, and loader for `.kodemux/config.json`.
  *
  * The router is policy-driven: a capability ladder of tiers, complexity
  * thresholds that pick the tier, and a risk floor. Every knob is overridable.
@@ -14,7 +14,7 @@ import {
   type Tier,
 } from './constants/models.js';
 
-export const CONFIG_DIR = '.codemux';
+export const CONFIG_DIR = '.kodemux';
 export const CONFIG_FILE = 'config.json';
 export const CONFIG_VERSION = 2;
 
@@ -56,7 +56,7 @@ export interface HookConfig {
   };
 }
 
-export interface CodemuxConfig {
+export interface KodemuxConfig {
   version: number;
   stack: string[];
   router: RouterPolicy;
@@ -88,7 +88,7 @@ export function defaultRouterPolicy(): RouterPolicy {
 }
 
 /** Build a default config for a freshly detected stack. */
-export function defaultConfig(stack: string[]): CodemuxConfig {
+export function defaultConfig(stack: string[]): KodemuxConfig {
   return {
     version: CONFIG_VERSION,
     stack,
@@ -108,11 +108,11 @@ export function configPath(cwd: string): string {
 }
 
 /**
- * Load and normalize `.codemux/config.json`. Missing fields fall back to
+ * Load and normalize `.kodemux/config.json`. Missing fields fall back to
  * defaults, so a partial hand-edited config stays valid. Throws a readable
  * error if the file is present but not valid JSON.
  */
-export function loadConfig(cwd: string): CodemuxConfig | null {
+export function loadConfig(cwd: string): KodemuxConfig | null {
   const path = configPath(cwd);
   if (!existsSync(path)) return null;
 
@@ -124,7 +124,7 @@ export function loadConfig(cwd: string): CodemuxConfig | null {
     throw new Error(`Invalid JSON in ${path}: ${msg}`);
   }
 
-  const parsed = (raw ?? {}) as Partial<CodemuxConfig>;
+  const parsed = (raw ?? {}) as Partial<KodemuxConfig>;
   const base = defaultConfig(parsed.stack ?? []);
   const pr = (parsed.router ?? {}) as Partial<RouterPolicy>;
   return {

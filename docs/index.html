@@ -3,22 +3,22 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>codemux — the routing layer for AI coding agents</title>
-<meta name="description" content="codemux sits between your prompt and your AI coding agent: it estimates the task's complexity, routes it to the cheapest capable model on a Haiku→Sonnet→Opus→Fable ladder, and escalates when unsure. Try the live router." />
-<link rel="canonical" href="https://vibhusharma101.github.io/codemux/" />
+<title>kodemux — the routing layer for AI coding agents</title>
+<meta name="description" content="kodemux sits between your prompt and your AI coding agent: it estimates the task's complexity, routes it to the cheapest capable model on a Haiku→Sonnet→Opus→Fable ladder, and escalates when unsure. Try the live router." />
+<link rel="canonical" href="https://vibhusharma101.github.io/kodemux/" />
 
 <meta property="og:type" content="website" />
-<meta property="og:url" content="https://vibhusharma101.github.io/codemux/" />
-<meta property="og:site_name" content="codemux" />
-<meta property="og:title" content="codemux — route every AI coding task to the cheapest model that can do it" />
+<meta property="og:url" content="https://vibhusharma101.github.io/kodemux/" />
+<meta property="og:site_name" content="kodemux" />
+<meta property="og:title" content="kodemux — route every AI coding task to the cheapest model that can do it" />
 <meta property="og:description" content="Estimates task complexity from multiple signals, routes on a Haiku→Sonnet→Opus→Fable capability ladder, floors up for security/production risk, and escalates when unsure. Try the live router." />
-<meta property="og:image" content="https://opengraph.githubassets.com/1/vibhusharma101/codemux" />
-<meta property="og:image:alt" content="codemux — repo-native middleware & guardrail engine for AI coding tools" />
+<meta property="og:image" content="https://opengraph.githubassets.com/1/vibhusharma101/kodemux" />
+<meta property="og:image:alt" content="kodemux — repo-native middleware & guardrail engine for AI coding tools" />
 
 <meta name="twitter:card" content="summary_large_image" />
-<meta name="twitter:title" content="codemux — route every AI coding task to the cheapest model that can do it" />
+<meta name="twitter:title" content="kodemux — route every AI coding task to the cheapest model that can do it" />
 <meta name="twitter:description" content="Estimates task complexity from multiple signals, routes on a Haiku→Sonnet→Opus→Fable capability ladder, floors up for security/production risk, and escalates when unsure." />
-<meta name="twitter:image" content="https://opengraph.githubassets.com/1/vibhusharma101/codemux" />
+<meta name="twitter:image" content="https://opengraph.githubassets.com/1/vibhusharma101/kodemux" />
 <style>
   :root {
     color-scheme: light dark;
@@ -230,12 +230,12 @@
 <body>
 <header class="bar">
   <div class="wrap bar-inner">
-    <span class="brand"><span class="dot"></span>codemux</span>
+    <span class="brand"><span class="dot"></span>kodemux</span>
     <span class="bar-spacer"></span>
     <a class="ghost" href="#router">router</a>
     <a class="ghost" href="#ladder">ladder</a>
     <a class="ghost" href="#guardrails">guardrails</a>
-    <a class="ghost" href="https://github.com/vibhusharma101/codemux">GitHub ↗</a>
+    <a class="ghost" href="https://github.com/vibhusharma101/kodemux">GitHub ↗</a>
     <button class="theme-btn" id="themeToggle" aria-label="Toggle color theme">◐ theme</button>
   </div>
 </header>
@@ -246,7 +246,7 @@
       <span class="eyebrow">repo-native middleware · for AI coding agents</span>
       <h1>Route each task to the <span class="em">cheapest model that can do it.</span></h1>
       <p class="lede">
-        codemux estimates how hard a prompt really is — from signals, not a keyword lookup — and picks a rung on a
+        kodemux estimates how hard a prompt really is — from signals, not a keyword lookup — and picks a rung on a
         <strong>Haiku → Sonnet → Opus → Fable</strong> ladder. It flags security &amp; production risk, and when it
         isn't sure, it <strong>escalates</strong> instead of guessing. Then it wraps the change in git-level guardrails.
       </p>
@@ -254,24 +254,24 @@
       <div class="pipeline" aria-hidden="true">
         <div class="pnode"><span class="k">input</span><span class="v">your prompt</span></div>
         <span class="parrow">→</span>
-        <div class="pnode mux"><span class="k">codemux</span><span class="v">estimate + route + pre-hooks</span></div>
+        <div class="pnode mux"><span class="k">kodemux</span><span class="v">estimate + route + pre-hooks</span></div>
         <span class="parrow">→</span>
         <div class="pnode"><span class="k">execute</span><span class="v">Claude Code / agent</span></div>
         <span class="parrow">→</span>
-        <div class="pnode mux"><span class="k">codemux</span><span class="v">post-hooks + guard</span></div>
+        <div class="pnode mux"><span class="k">kodemux</span><span class="v">post-hooks + guard</span></div>
         <span class="parrow">→</span>
         <div class="pnode"><span class="k">output</span><span class="v">safe commit</span></div>
       </div>
 
       <div class="cta-row">
-        <a class="btn cta" href="https://github.com/vibhusharma101/codemux" target="_blank" rel="noopener">
+        <a class="btn cta" href="https://github.com/vibhusharma101/kodemux" target="_blank" rel="noopener">
           <svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg>
           <span>View on GitHub</span>
         </a>
-        <button class="btn sec cta" id="copyRepo" type="button" data-copy="https://github.com/vibhusharma101/codemux">
-          <code>github.com/vibhusharma101/codemux</code>
+        <button class="btn sec cta" id="copyRepo" type="button" data-copy="https://github.com/vibhusharma101/kodemux">
+          <code>github.com/vibhusharma101/kodemux</code>
         </button>
-        <button class="btn sec cta" id="copyPage" type="button" data-copy="https://vibhusharma101.github.io/codemux/">
+        <button class="btn sec cta" id="copyPage" type="button" data-copy="https://vibhusharma101.github.io/kodemux/">
           Copy page link
         </button>
       </div>
@@ -371,7 +371,7 @@
       </div>
       <div class="cols">
         <div class="panel panel-pad">
-          <p class="gr-title"><code>codemux scan</code> <span class="tag">pre-hook</span></p>
+          <p class="gr-title"><code>kodemux scan</code> <span class="tag">pre-hook</span></p>
           <p class="gr-sub">Scans changed files for secret-shaped strings and refuses to hand them to an agent. Findings are always masked.</p>
           <textarea class="scanbox" id="scanbox" spellcheck="false"># paste a diff or config snippet…
 DATABASE_URL=postgres://localhost/app
@@ -383,7 +383,7 @@ API_KEY=replace_me</textarea>
           <div id="scanResult"></div>
         </div>
         <div class="panel panel-pad">
-          <p class="gr-title"><code>codemux guard</code> <span class="tag">pre-hook</span></p>
+          <p class="gr-title"><code>kodemux guard</code> <span class="tag">pre-hook</span></p>
           <p class="gr-sub">Refuses direct edits on a protected branch, so an agent is forced onto a feature branch first.</p>
           <label class="field">Current branch</label>
           <div class="branch-opts" id="branchOpts"></div>
@@ -403,18 +403,18 @@ API_KEY=replace_me</textarea>
       </div>
       <div class="steps" style="margin-bottom:18px">
         <div class="step"><span class="n">STEP 1</span><h3>Install</h3><p>One curl line, or clone and build from source.</p></div>
-        <div class="step"><span class="n">STEP 2</span><h3>Init</h3><p><code>codemux init</code> detects your stack and scaffolds <code>.codemux/</code>.</p></div>
+        <div class="step"><span class="n">STEP 2</span><h3>Init</h3><p><code>kodemux init</code> detects your stack and scaffolds <code>.kodemux/</code>.</p></div>
         <div class="step"><span class="n">STEP 3</span><h3>Route &amp; guard</h3><p>Wire <code>route</code>, <code>scan</code>, <code>guard</code>, and <code>post</code> into your agent or git hooks.</p></div>
       </div>
       <pre class="code"><span class="c"># install from source (published to npm in a later release)</span>
-curl -fsSL https://raw.githubusercontent.com/vibhusharma101/codemux/main/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/vibhusharma101/kodemux/main/install.sh | sh
 
 <span class="c"># in any repo</span>
-codemux init
-codemux route <span class="p">"design a distributed rate limiter"</span>   <span class="c"># → opus-4-8 / xhigh / /plan</span>
-codemux route <span class="p">"fix a typo in the README"</span>          <span class="c"># → haiku-4-5 / single</span>
-codemux guard <span class="c"># refuse edits on main</span>
-codemux scan  <span class="c"># secrets check</span></pre>
+kodemux init
+kodemux route <span class="p">"design a distributed rate limiter"</span>   <span class="c"># → opus-4-8 / xhigh / /plan</span>
+kodemux route <span class="p">"fix a typo in the README"</span>          <span class="c"># → haiku-4-5 / single</span>
+kodemux guard <span class="c"># refuse edits on main</span>
+kodemux scan  <span class="c"># secrets check</span></pre>
     </section>
 
     <section style="padding-top:20px">
@@ -432,19 +432,19 @@ codemux scan  <span class="c"># secrets check</span></pre>
 
 <footer>
   <div class="wrap frow">
-    <span class="brand" style="font-size:15px"><span class="dot"></span>codemux</span>
+    <span class="brand" style="font-size:15px"><span class="dot"></span>kodemux</span>
     <span class="bar-spacer"></span>
-    <a href="https://github.com/vibhusharma101/codemux">source</a>
-    <a href="https://github.com/vibhusharma101/codemux/blob/main/PLAN.md">plan</a>
-    <a href="https://github.com/vibhusharma101/codemux/blob/main/docs/INTERNALS.md">internals</a>
-    <a href="https://github.com/vibhusharma101/codemux/releases">releases</a>
+    <a href="https://github.com/vibhusharma101/kodemux">source</a>
+    <a href="https://github.com/vibhusharma101/kodemux/blob/main/PLAN.md">plan</a>
+    <a href="https://github.com/vibhusharma101/kodemux/blob/main/docs/INTERNALS.md">internals</a>
+    <a href="https://github.com/vibhusharma101/kodemux/releases">releases</a>
     <span class="note">MIT · built with the Think-In-HTML approach</span>
   </div>
 </footer>
 
 <script>
 /* ============================================================
-   codemux router, ported line-for-line from the TypeScript source
+   kodemux router, ported line-for-line from the TypeScript source
    (src/classify.ts, src/router.ts, src/config.ts, src/scan.ts)
    so this page demonstrates the real behavior, not a mock.
    ============================================================ */
@@ -718,9 +718,9 @@ function scanText(text){
 }
 function runScan(){
   const f = scanText($("scanbox").value); const o=$("scanResult");
-  if (!f.length){ o.className="result ok"; o.textContent="✓ codemux scan: no secrets found — safe to hand off."; return; }
+  if (!f.length){ o.className="result ok"; o.textContent="✓ kodemux scan: no secrets found — safe to hand off."; return; }
   o.className="result bad";
-  o.innerHTML = `✗ codemux scan: ${f.length} potential secret(s) — blocked (exit 1)` + f.map(x=>`<span class="li">line ${x.line} · [${x.rule}] · ${x.match}</span>`).join("");
+  o.innerHTML = `✗ kodemux scan: ${f.length} potential secret(s) — blocked (exit 1)` + f.map(x=>`<span class="li">line ${x.line} · [${x.rule}] · ${x.match}</span>`).join("");
 }
 $("scanRun").addEventListener("click", runScan);
 $("scanLeak").addEventListener("click", ()=>{

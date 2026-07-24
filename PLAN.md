@@ -1,4 +1,4 @@
-# codemux — Product & Implementation Plan
+# kodemux — Product & Implementation Plan
 
 Open-source, repo-native middleware and hook engine that sits between developer prompts and AI coding tools (Claude Code, Cursor, custom agents). It auto-detects repo context, routes each task to the optimal model/effort/mode, and enforces git-level guardrails before and after code generation.
 
@@ -21,7 +21,7 @@ Open-source, repo-native middleware and hook engine that sits between developer 
         │
         ▼
 ┌──────────────────────────────────────────────┐
-│              codemux                │
+│              kodemux                │
 │  1. Intent Classifier → (Model + Effort + Mode)│
 │  2. Pre-Hooks → secrets, context limit, branch │
 └───────────────────┬──────────────────────────┘
