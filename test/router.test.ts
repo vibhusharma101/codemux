@@ -95,6 +95,44 @@ test('a non-critical path adds no risk', () => {
   assert.ok(!r.risks.includes('critical'));
 });
 
+test('aiHint can raise the tier but never lower it', () => {
+  // deterministic pass alone would land at `standard`
+  const base = route('add a small feature');
+  assert.equal(base.tier, 'standard');
+
+  const raised = route('add a small feature', undefined, {}, { complexity: 12, risks: [] });
+  assert.equal(raised.tier, 'frontier');
+  assert.equal(raised.aiAssisted, true);
+  assert.ok(raised.reasons.some((r) => r.includes('ai-assist')));
+
+  // a LOW aiHint complexity must never pull the tier back down below what the
+  // deterministic analysis already established
+  const lowered = route('add a small feature', undefined, {}, { complexity: 0, risks: [] });
+  assert.equal(lowered.tier, base.tier);
+});
+
+test('aiHint risk flags merge with deterministic risks and floor the tier', () => {
+  const r = route('tweak a default value', undefined, {}, { complexity: 1, risks: ['security'] });
+  assert.ok(r.risks.includes('security'));
+  assert.equal(r.target.model, MODELS.OPUS_4_8);
+});
+
+test('aiHint sets aiAssisted and boosts confidence past the escalation threshold', () => {
+  const r = route(
+    'touch the concurrency thing but keep it a small rename',
+    undefined,
+    {},
+    { complexity: 6, risks: [], rationale: 'genuinely touches shared state' },
+  );
+  assert.equal(r.aiAssisted, true);
+  assert.ok(r.confidence >= 0.6);
+});
+
+test('no aiHint means aiAssisted is false and behavior is unchanged', () => {
+  const r = route('fix a typo in the README');
+  assert.equal(r.aiAssisted, false);
+});
+
 test('directivesFor omits /effort when the model has none', () => {
   const withEffort = directivesFor({ model: MODELS.SONNET_5, effort: 'high', mode: 'plan' });
   assert.deepEqual(withEffort, ['/model claude-sonnet-5', '/effort high', '/plan']);

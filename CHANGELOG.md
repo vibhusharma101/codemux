@@ -4,6 +4,43 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres
 to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] - 2026-07-24
+
+AI-assisted escalation — an optional, cheap second opinion for the ambiguous
+minority of prompts the deterministic router isn't confident about.
+
+### Added
+
+- **AI-assisted escalation**, on by default. When the deterministic router's
+  confidence is below `escalateBelowConfidence` (same threshold that already
+  gated the escalation cascade), `kodemux route` now makes **one** cheap call to
+  `claude-haiku-4-5` to get a real semantic read on the task before falling back
+  to the plain deterministic guess.
+  - **Reuses existing credentials** — `new Anthropic()` with no arguments resolves
+    whatever is already configured (`ANTHROPIC_API_KEY` or an `ant auth login`
+    profile). No separate API key or account to set up.
+  - The judge can only **raise** complexity/risk found by the deterministic pass
+    — never lower it — so the merged decision stays explainable and auditable.
+  - **Always fails safe.** No credentials, a network error, an 8-second timeout,
+    a model refusal, or a malformed response all fall back to the deterministic
+    result silently — the CLI never crashes, hangs, or blocks on it.
+  - Disable with `--no-ai` or `router.aiAssist: false` in config.
+- `src/ai-judge.ts` — `judgeComplexity()` / `judgeWithClient()`, split for
+  dependency-injected testing (no real network calls in the test suite).
+- `route()` gains an optional `aiHint` parameter and `RouteResult.aiAssisted`;
+  the deterministic core (`analyze`/`route`) remains fully synchronous and pure
+  — only the CLI orchestration layer is async and only it touches the network.
+- `route --json` now includes an `aiAssist` block (`attempted`, `applied`,
+  and either the judge's result or the skip reason) for full transparency.
+- Config schema v3 adds `router.aiAssist` (default `true`).
+- 16 new tests (was 63, now **79**): judge parsing/clamping/error-handling with a
+  mocked client, router-level `aiHint` merge behavior, and CLI-level orchestration
+  with an injected fake judge.
+
+### Changed
+
+- New dependency: `@anthropic-ai/sdk`.
+
 ## [0.3.1] - 2026-07-24
 
 ### Changed
@@ -95,6 +132,7 @@ Initial release — the full v1 CLI: routing plus pre/post guardrails.
 - Implemented on Node + TypeScript rather than Bun (per PLAN.md), and the generated
   directory is `.kodemux/` rather than `.middleware/`.
 
+[0.4.0]: https://github.com/vibhusharma101/kodemux/releases/tag/v0.4.0
 [0.3.1]: https://github.com/vibhusharma101/kodemux/releases/tag/v0.3.1
 [0.3.0]: https://github.com/vibhusharma101/kodemux/releases/tag/v0.3.0
 [0.2.0]: https://github.com/vibhusharma101/kodemux/releases/tag/v0.2.0

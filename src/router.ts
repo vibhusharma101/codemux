@@ -28,6 +28,17 @@ export interface Escalation {
   trigger: string;
 }
 
+/**
+ * Optional input from the AI-assist judge (src/ai-judge.ts). The router only
+ * ever raises complexity/risk from this — it can escalate a route, never
+ * quietly downgrade one — so the deterministic floor is always the safety net.
+ */
+export interface AiHint {
+  complexity: number;
+  risks: RiskFlag[];
+  rationale?: string;
+}
+
 export interface RouteResult {
   intent: Intent;
   complexity: number;
@@ -43,6 +54,8 @@ export interface RouteResult {
   confidence: number;
   /** Cascade recommendation when confidence is low; null otherwise. */
   escalation: Escalation | null;
+  /** True when an AiHint was applied (and actually contributed to the score). */
+  aiAssisted: boolean;
   /** Agent-facing directives, e.g. `/model claude-opus-4-8`, `/effort xhigh`. */
   directives: string[];
   reasons: string[];
@@ -162,25 +175,40 @@ function chooseMode(a: Analysis, tier: Tier): Mode {
 /**
  * Route a prompt to a tier on the capability ladder. Uses the config's router
  * policy when provided (so overrides apply), otherwise the built-in defaults.
+ *
+ * `aiHint` is the optional output of the AI-assist judge (src/ai-judge.ts).
+ * When present, it can only *raise* complexity/risk — never lower them — so
+ * the deterministic analysis remains the floor and this function stays a pure,
+ * synchronous, fully-testable calculation regardless of how the hint was
+ * obtained.
  */
 export function route(
   prompt: string,
   config?: { router: RouterPolicy },
   signals: Signals = {},
+  aiHint?: AiHint,
 ): RouteResult {
   const p = config?.router ?? defaultRouterPolicy();
   const a = analyze(prompt, signals);
 
-  // Merge prompt-derived risks with critical-path risk from the actual diff.
+  // Merge prompt-derived risks with critical-path risk from the actual diff,
+  // then with anything the AI judge flagged.
   const risks: RiskFlag[] = [...a.risks];
   const criticalHits =
     signals.paths && p.criticalPaths?.length
       ? signals.paths.filter((path) => matchesAny(path, p.criticalPaths))
       : [];
   if (criticalHits.length && !risks.includes('critical')) risks.push('critical');
+  for (const r of aiHint?.risks ?? []) {
+    if (!risks.includes(r)) risks.push(r);
+  }
+
+  // The AI hint can only raise the complexity score, never lower it.
+  const complexity = aiHint ? Math.max(a.complexity, aiHint.complexity) : a.complexity;
+  const aiAssisted = Boolean(aiHint);
 
   // Base tier from complexity, then apply intent + risk floors.
-  let tier = tierFromComplexity(a.complexity, p);
+  let tier = tierFromComplexity(complexity, p);
   const floor = INTENT_FLOOR[a.intent];
   if (floor) tier = maxTier(tier, floor);
   if (risks.length) tier = maxTier(tier, p.riskFloor);
@@ -188,7 +216,7 @@ export function route(
   const spec = p.tiers[tier];
 
   // Boosted effort at the top of a band or when risk is present.
-  const upperBand = a.complexity >= (p.thresholds.frontier + p.thresholds.complex) / 2;
+  const upperBand = complexity >= (p.thresholds.frontier + p.thresholds.complex) / 2;
   const boost = risks.length > 0 || upperBand || (a.multiStep && tierIndex(tier) >= tierIndex('complex'));
   const effort = spec.efforts[boost ? 1 : 0] ?? spec.efforts[0];
 
@@ -196,7 +224,10 @@ export function route(
   const target: RouteTarget = { model: spec.model, effort, mode };
   const parallelAgents = recommendParallelism(a, mode, signals.fileCount);
 
-  const confidence = estimateConfidence(a, a.complexity, p);
+  // A successful AI consultation resolves the ambiguity that triggered it —
+  // treat the merged decision as confident rather than re-scoring the
+  // (now-stale) text-only signal.
+  const confidence = aiAssisted ? 0.85 : estimateConfidence(a, complexity, p);
 
   // Escalation (cascade): recommend the next tier up when unsure.
   let escalation: Escalation | null = null;
@@ -215,8 +246,14 @@ export function route(
   if (criticalHits.length) {
     reasons.push(`critical path touched (${criticalHits.slice(0, 3).join(', ')}) → +risk`);
   }
+  if (aiHint) {
+    const raised = aiHint.complexity > a.complexity ? ` (raised from ${a.complexity})` : '';
+    reasons.push(
+      `ai-assist (haiku): complexity ${aiHint.complexity}${raised}${aiHint.rationale ? ` — ${aiHint.rationale}` : ''}`,
+    );
+  }
   reasons.unshift(
-    `complexity ${a.complexity} + ${risks.length ? `risk[${risks.join(',')}] ` : ''}intent ${a.intent} → ${tier} tier`,
+    `complexity ${complexity} + ${risks.length ? `risk[${risks.join(',')}] ` : ''}intent ${a.intent} → ${tier} tier`,
   );
   if (mode === 'multi-agent') {
     reasons.push(`parallelizable work → fan out to ${parallelAgents} agents`);
@@ -224,13 +261,14 @@ export function route(
 
   return {
     intent: a.intent,
-    complexity: a.complexity,
+    complexity,
     tier,
     risks,
     target,
     parallelAgents,
     confidence,
     escalation,
+    aiAssisted,
     directives: directivesFor(target, parallelAgents),
     reasons,
   };

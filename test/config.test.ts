@@ -21,7 +21,26 @@ test('defaultConfig builds the capability ladder and protects main', () => {
   assert.equal(cfg.router.tiers.simple.efforts[0], null); // Haiku has no effort
   assert.equal(cfg.router.riskFloor, 'complex');
   assert.ok(cfg.router.criticalPaths.includes('**/auth/**'));
+  assert.equal(cfg.router.aiAssist, true);
   assert.ok(cfg.hooks.pre.branchProtection.includes('main'));
+});
+
+test('aiAssist can be disabled via a partial config override', () => {
+  const { dir, cleanup } = tempRepo();
+  try {
+    mkdirSync(join(dir, CONFIG_DIR));
+    writeFileSync(
+      join(dir, CONFIG_DIR, 'config.json'),
+      JSON.stringify({ router: { aiAssist: false } }),
+    );
+    const cfg = loadConfig(dir);
+    assert.ok(cfg);
+    assert.equal(cfg.router.aiAssist, false);
+    // untouched fields still fall back to defaults
+    assert.equal(cfg.router.riskFloor, 'complex');
+  } finally {
+    cleanup();
+  }
 });
 
 test('loadConfig returns null when no config exists', () => {
