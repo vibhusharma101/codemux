@@ -1,5 +1,13 @@
 # kodemux — Product & Implementation Plan
 
+> ⚠️ **Historical design document.** This is the original product & implementation
+> plan written *before* kodemux was built, preserved for context on the project's
+> early thinking. Some details no longer match the shipped tool — for example, the
+> generated directory is `.kodemux/` (not `.middleware/`), the runtime is Node ≥ 20
+> with `tsc` (not Bun), the CLI is invoked as `kodemux` (not `middleware`), and the
+> routing engine described as "planned" has since shipped and evolved considerably.
+> For how kodemux actually works today, see [`docs/INTERNALS.md`](./docs/INTERNALS.md).
+
 Open-source, repo-native middleware and hook engine that sits between developer prompts and AI coding tools (Claude Code, Cursor, custom agents). It auto-detects repo context, routes each task to the optimal model/effort/mode, and enforces git-level guardrails before and after code generation.
 
 ---
