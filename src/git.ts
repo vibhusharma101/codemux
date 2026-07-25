@@ -13,7 +13,11 @@ export interface ChangedFile {
 
 /** Run a git subcommand at `cwd` and return stdout. Throws on non-zero exit. */
 export function runGit(cwd: string, args: string[]): string {
-  return execFileSync('git', args, { cwd, encoding: 'utf8' });
+  // `stdio: ['ignore', ...]` is deliberate: when kodemux runs as a hook it has
+  // already consumed its own stdin pipe, and letting the git child inherit that
+  // emptied pipe makes spawnSync fail with ENOENT on Windows. Ignoring stdin
+  // avoids that entirely.
+  return execFileSync('git', args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
 }
 
 /** Parse `git status --porcelain` output into changed files. Pure. */

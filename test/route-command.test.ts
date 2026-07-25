@@ -77,6 +77,31 @@ test('runRoute shows n/a effort for the Haiku (simple) tier', async () => {
   }
 });
 
+test('runRoute always states the agent count, even for single-agent mode', async () => {
+  const { dir, cleanup } = tempRepo();
+  try {
+    const out = await runRoute(dir, 'fix a typo in the docs', { git: false, ai: false });
+    assert.match(out.text, /agents +1 +\(single agent — do not parallelize\)/);
+  } finally {
+    cleanup();
+  }
+});
+
+test('runRoute recommends fanning out for genuinely parallelizable work', async () => {
+  const { dir, cleanup } = tempRepo();
+  try {
+    const out = await runRoute(
+      dir,
+      'rewrite the entire distributed architecture across the whole codebase, then migrate the data pipeline, then add tests',
+      { git: false, ai: false },
+    );
+    assert.match(out.text, /mode +multi-agent/);
+    assert.match(out.text, /agents +\d+ +\(parallelize — independent workstreams\)/);
+  } finally {
+    cleanup();
+  }
+});
+
 // --- AI-assist orchestration (injected judge — no real network) ---
 
 test('a confident deterministic result never calls the judge', async () => {

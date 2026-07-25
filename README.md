@@ -162,6 +162,7 @@ kodemux post                              # plan scoped format/lint/test
 | `kodemux guard` | **Pre-hook.** Refuse direct edits on a protected branch. Exit 1 to block. |
 | `kodemux scan [--json]` | **Pre-hook.** Scan changed files for secret-shaped strings. Exit 1 on a hit. |
 | `kodemux post [--run] [--json]` | **Post-hook.** Plan (dry-run) or run scoped format/lint/test for changed files. |
+| `kodemux hooks install [--global]` | Register kodemux's `UserPromptSubmit`/`PreToolUse` hooks in Claude Code's `.claude/settings.json`. Additive and idempotent — merges into existing hooks, backs up the file, safe to re-run. `--global` installs to `~/.claude/settings.json` instead of the project. |
 
 ### Routing
 
@@ -223,11 +224,16 @@ confidence  0.69
 model       claude-haiku-4-5
 effort      n/a (model has no effort control)
 mode        single
+agents      1  (single agent — do not parallelize)
 
 $ kodemux route "refactor the entire architecture" --files 40 --diff-lines 1200
 tier        frontier          model  claude-fable-5   effort  max
-mode        multi-agent  (5 agents in parallel)   →  /agents 5
+mode        multi-agent       agents 5  (parallelize — independent workstreams)   →  /agents 5
 ```
+
+The `agents` line is **always printed**, not just when parallelizing — a task that
+should run single-threaded says so explicitly, instead of leaving it to be inferred
+from an absent line. Same rule in the Claude Code hook context below.
 
 `--json` emits the full decision (tier, complexity, risks, confidence, escalation,
 parallelAgents, directives) for use as middleware in an agent wrapper. Every tier,
@@ -288,6 +294,69 @@ kodemux post --run
 ```
 
 Use `route --json` inside an agent wrapper to pick the model before dispatching.
+
+### Claude Code (native hooks)
+
+```sh
+kodemux hooks install            # registers into ./.claude/settings.json
+kodemux hooks install --global   # or ~/.claude/settings.json, for every project
+```
+
+This wires two Claude Code hooks, both running through the same CLI you already
+have installed — no extra config, no API key:
+
+- **`UserPromptSubmit`** — runs the deterministic router on your prompt and
+  injects a routing recommendation (`tier · model · effort · mode`, risk flags,
+  parallel-agent count) as additional context. Advisory only — it never blocks,
+  and Claude Code itself is free to override it using the repo context it can
+  already read.
+- **`PreToolUse` (Bash)** — intercepts `git commit` invocations and blocks them
+  (exit 2, with a reason Claude Code surfaces to the model) when the branch is
+  protected or the diff has a secret-shaped string, i.e. `guard` + `scan`
+  enforced automatically instead of run by hand.
+
+Installing is additive: it merges into whatever `hooks` already exist in your
+`settings.json` (never replaces another tool's entries) and writes a `.bak`
+backup before touching an existing file. Running it again is a no-op.
+
+Prefer a zero-install, copy-paste version instead (a markdown skill + a couple
+of shell scripts, no Node CLI required)? See [`pack/`](./pack) — same routing
+rubric, drop the files straight into a repo's `.claude/`.
+
+<details>
+<summary>What Claude Code actually sees (verified against the real hook payloads)</summary>
+
+`UserPromptSubmit` — additional context injected before the model starts. The
+agent count is **always stated explicitly, even when it's 1** — so a skipped line
+never has to be read as "parallelize" by omission:
+
+```
+kodemux routing recommendation (deterministic — verify against your own read of the repo before deferring to it):
+  tier complex · model claude-opus-4-8 · effort xhigh · mode single
+  risk flags: security
+  agents: 1 — do not parallelize this; a single agent working sequentially is enough, extra agents would just add coordination overhead.
+  confidence 0.57 — deterministic signal is thin here; use your own read of the repo to confirm or override this tier.
+```
+
+A wide-scope, multi-step prompt ("rewrite the entire distributed architecture across
+the whole codebase, then migrate the data pipeline, then add tests") floors to
+`multi-agent` mode instead:
+
+```
+kodemux routing recommendation (deterministic — verify against your own read of the repo before deferring to it):
+  tier frontier · model claude-fable-5 · effort max · mode multi-agent
+  agents: 4 — genuinely parallelizable (independent files/workstreams); split it across 4 agents instead of running it serially.
+```
+
+`PreToolUse` (Bash) — a `git commit` on a protected branch gets exit code 2 with:
+
+```json
+{"decision":"block","reason":"kodemux guard: kodemux guard: refusing direct edits on protected branch 'main'.\nCreate a feature branch first (e.g. git checkout -b feat/your-change)."}
+```
+
+...and the same commit on a clean feature branch just exits 0 with no output.
+
+</details>
 
 ---
 

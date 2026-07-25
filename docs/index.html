@@ -235,6 +235,7 @@
     <a class="ghost" href="#router">router</a>
     <a class="ghost" href="#ladder">ladder</a>
     <a class="ghost" href="#guardrails">guardrails</a>
+    <a class="ghost" href="#hooks">claude code</a>
     <a class="ghost" href="https://github.com/vibhusharma101/kodemux">GitHub ↗</a>
     <button class="theme-btn" id="themeToggle" aria-label="Toggle color theme">◐ theme</button>
   </div>
@@ -398,26 +399,63 @@ API_KEY=replace_me</textarea>
       </div>
     </section>
 
-    <section>
+    <section id="hooks">
       <div class="section-head">
         <span class="num">04</span>
+        <h2>Wire it into Claude Code</h2>
+        <p>One command turns the router and guardrails into native Claude Code hooks — a routing recommendation appears before every prompt, risky commits are blocked outright.</p>
+      </div>
+      <pre class="code"><span class="c"># in any repo, once</span>
+kodemux hooks install            <span class="c"># -&gt; ./.claude/settings.json</span>
+kodemux hooks install --global   <span class="c"># -&gt; ~/.claude/settings.json, every project</span></pre>
+      <div class="cols" style="margin-top:18px">
+        <div class="panel panel-pad">
+          <p class="gr-title"><code>UserPromptSubmit</code> <span class="tag">advisory</span></p>
+          <p class="gr-sub">Runs the deterministic router on your prompt and injects the recommendation as context. The agent count is <b>always stated, even when it's 1</b> — never left to be inferred from an absent line. Never blocks — Claude can always override it.</p>
+          <pre class="code"><span class="c">// "fix a typo in the README"</span>
+tier simple · model claude-haiku-4-5 · mode single
+agents: 1 — do not parallelize; a single
+agent working sequentially is enough.
+
+<span class="c">// wide-scope, multi-step rewrite</span>
+tier frontier · model claude-fable-5 · mode multi-agent
+agents: 4 — genuinely parallelizable;
+split it across 4 agents.</pre>
+        </div>
+        <div class="panel panel-pad">
+          <p class="gr-title"><code>PreToolUse</code> <span class="tag">Bash · enforced</span></p>
+          <p class="gr-sub">Intercepts <code>git commit</code> and runs <code>guard</code> + <code>scan</code> automatically — a hit exits 2 and blocks the tool call outright.</p>
+          <pre class="code"><span class="c">// git commit on a protected branch</span>
+{"decision":"block","reason":"kodemux guard:
+refusing direct edits on protected branch
+'main'. Create a feature branch first."}</pre>
+        </div>
+      </div>
+      <p class="note" style="margin-top:16px">Additive &amp; idempotent — merges into whatever hooks already exist, backs up the file first, safe to re-run. Prefer zero-install? <a href="https://github.com/vibhusharma101/kodemux/tree/main/pack">pack/</a> is the same rubric as a copy-paste markdown skill, no Node CLI required.</p>
+    </section>
+
+    <section>
+      <div class="section-head">
+        <span class="num">05</span>
         <h2>Get started</h2>
         <p>Node ≥ 20. Free and open source, MIT.</p>
       </div>
       <div class="steps" style="margin-bottom:18px">
-        <div class="step"><span class="n">STEP 1</span><h3>Install</h3><p>One curl line, or clone and build from source.</p></div>
+        <div class="step"><span class="n">STEP 1</span><h3>Install</h3><p>Clone &amp; <code>npm link</code> — no build step, <code>dist/</code> is committed.</p></div>
         <div class="step"><span class="n">STEP 2</span><h3>Init</h3><p><code>kodemux init</code> detects your stack and scaffolds <code>.kodemux/</code>.</p></div>
-        <div class="step"><span class="n">STEP 3</span><h3>Route &amp; guard</h3><p>Wire <code>route</code>, <code>scan</code>, <code>guard</code>, and <code>post</code> into your agent or git hooks.</p></div>
+        <div class="step"><span class="n">STEP 3</span><h3>Route, guard &amp; hook</h3><p>Wire <code>route</code>/<code>guard</code>/<code>scan</code>/<code>post</code> into your agent, or run <code>hooks install</code> for native Claude Code hooks.</p></div>
       </div>
-      <pre class="code"><span class="c"># install from source (published to npm in a later release)</span>
-curl -fsSL https://raw.githubusercontent.com/vibhusharma101/kodemux/main/install.sh | sh
+      <pre class="code"><span class="c"># clone & link — works everywhere, incl. Windows & the Claude Code terminal</span>
+git clone https://github.com/vibhusharma101/kodemux.git
+cd kodemux &amp;&amp; npm install &amp;&amp; npm link
 
 <span class="c"># in any repo</span>
 kodemux init
 kodemux route <span class="p">"design a distributed rate limiter"</span>   <span class="c"># → opus-4-8 / xhigh / /plan</span>
 kodemux route <span class="p">"fix a typo in the README"</span>          <span class="c"># → haiku-4-5 / single</span>
-kodemux guard <span class="c"># refuse edits on main</span>
-kodemux scan  <span class="c"># secrets check</span></pre>
+kodemux guard         <span class="c"># refuse edits on main</span>
+kodemux scan          <span class="c"># secrets check</span>
+kodemux hooks install <span class="c"># native Claude Code UserPromptSubmit + PreToolUse hooks</span></pre>
     </section>
 
     <section style="padding-top:20px">
@@ -631,10 +669,12 @@ const $ = (id) => document.getElementById(id);
 const promptEl = $("prompt"), filesEl = $("files"), diffEl = $("diff");
 const EXAMPLES = [
   "fix a typo in the README",
-  "add a CSV export endpoint",
-  "audit the auth flow for vulnerabilities",
-  "migrate the database schema and deploy to production",
-  "rewrite the storage engine from scratch, optimize for latency",
+  "add a dark mode toggle to the settings page",
+  "refactor the authentication module to use JWT instead of sessions",
+  "audit the payment flow for security vulnerabilities",
+  "design a distributed rate limiter with consistent hashing",
+  "rewrite the entire data pipeline across the whole codebase, then migrate the schema, then add integration tests",
+  "touch the concurrency thing but keep it a small rename",
 ];
 EXAMPLES.forEach((ex)=>{ const b=document.createElement("button"); b.className="chip"; b.type="button"; b.textContent=ex; b.addEventListener("click",()=>{ promptEl.value=ex; render(); }); $("examples").appendChild(b); });
 
@@ -666,8 +706,12 @@ function render(){
   const dv = $("directives"); dv.innerHTML="";
   const heat = r.target.effort ? EFFORT_HEAT[r.target.effort] : TIER_HEAT[r.tier];
   const rows = [["model", r.target.model], ["effort", r.target.effort || "n/a (Haiku has no effort control)"], ["mode", r.target.mode]];
-  // Surface parallelism as its own row — kodemux plans the whole run, not just the model.
-  if (r.target.mode === "multi-agent") rows.push(["agents", `${r.parallelAgents} in parallel  →  /agents ${r.parallelAgents}`]);
+  // Surface parallelism as its own row, always — a task that should stay
+  // single-threaded says so explicitly, instead of leaving it to be inferred
+  // from an absent row.
+  rows.push(["agents", r.target.mode === "multi-agent"
+    ? `${r.parallelAgents} in parallel — genuinely parallelizable  →  /agents ${r.parallelAgents}`
+    : `1 — don't parallelize this`]);
   rows.forEach(([k,v],i)=>{ const el=document.createElement("div"); el.className="dir"; el.style.borderLeftColor=heat; el.style.animationDelay=(i*0.05)+"s"; el.innerHTML=`<span class="dk">${k}</span><span class="dv">${v}</span>`; dv.appendChild(el); });
 
   // confidence
