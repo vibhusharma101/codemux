@@ -78,7 +78,7 @@ export async function runRoute(cwd, prompt, opts = {}, deps = {}) {
     if (judgeOutcome && !judgeOutcome.ok) {
         lines.push(`ai-assist   skipped (${judgeOutcome.reason})`);
     }
-    lines.push('', `model       ${result.target.model}`, `effort      ${effort}`, `mode        ${result.target.mode}${result.target.mode === 'multi-agent' ? `  (${result.parallelAgents} agents in parallel)` : ''}`, '', 'directives:', ...result.directives.map((d) => `  ${d}`));
+    lines.push('', `model       ${result.target.model}`, `effort      ${effort}`, `mode        ${result.target.mode}`, `agents      ${result.parallelAgents}${result.target.mode === 'multi-agent' ? '  (parallelize — independent workstreams)' : '  (single agent — do not parallelize)'}`, '', 'directives:', ...result.directives.map((d) => `  ${d}`));
     if (result.escalation) {
         lines.push('', 'escalate to:', `  ${result.escalation.model} (${result.escalation.tier}) — ${result.escalation.trigger}`);
     }

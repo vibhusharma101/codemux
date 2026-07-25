@@ -4,6 +4,42 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres
 to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0] - 2026-07-25
+
+### Added
+
+- **Native Claude Code hook integration.** `kodemux hooks install [--global]`
+  registers two hooks into `.claude/settings.json` (project-local by default,
+  `--global` for `~/.claude/settings.json`): a `UserPromptSubmit` hook that
+  injects the deterministic routing recommendation as context ahead of every
+  prompt (advisory only, never blocks), and a `PreToolUse` hook on `Bash` that
+  intercepts `git commit` and enforces `guard` + `scan` automatically — blocking
+  on a protected branch or a secret-shaped string in the diff instead of relying
+  on the agent to run those checks by hand. Install is additive and idempotent:
+  it merges into whatever hooks already exist, backs up the file before writing,
+  and re-running it is a no-op. New `kodemux hook <event>` plumbing command reads
+  the Claude Code hook payload from stdin and dispatches to the adapter.
+- **`pack/`** — a zero-install, copy-paste alternative for repos that don't want
+  the Node CLI: the same routing rubric as a markdown skill plus two small
+  shell/PowerShell scripts, dropped straight into a project's `.claude/`.
+- **Every recommendation now states the agent count explicitly, even when it's 1**
+  — the CLI's `route` output, the `UserPromptSubmit` hook context, and the
+  `pack/` skill's output template all used to only mention parallel agents in
+  `multi-agent` mode, silently omitting the line otherwise. Now every response
+  says `agents: 1 — do not parallelize` or `agents: N — genuinely
+  parallelizable`, so it's never ambiguous whether to fan out.
+
+### Fixed
+
+- **CI has been red on every run since the repo's first commit.** `npm test`
+  passed a quoted glob (`"test/**/*.test.ts"`) as a literal string to `node
+  --test`; whether that resolves depends on the exact Node patch version, and
+  GitHub Actions' runners didn't support it, so `npm test` failed immediately
+  in CI (`Could not find '.../test/**/*.test.ts'`) while working locally.
+  Switched to an **unquoted** glob (`test/*.test.ts`) so the shell expands it
+  to real file paths before Node ever sees a glob string — portable across
+  Node versions and shells.
+
 ## [0.4.6] - 2026-07-25
 
 ### Added

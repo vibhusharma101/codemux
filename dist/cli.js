@@ -9,6 +9,8 @@ import { runRoute } from './commands/route.js';
 import { runScan } from './commands/scan.js';
 import { runGuard } from './commands/guard.js';
 import { runPost } from './commands/post.js';
+import { installHooks } from './commands/hooks-install.js';
+import { userPromptSubmitHook, preToolUseHook } from './hook-adapters.js';
 const require = createRequire(import.meta.url);
 const pkg = require('../package.json');
 const program = new Command();
@@ -76,6 +78,54 @@ program
     const out = runPost(process.cwd(), opts);
     (out.exitCode === 0 ? console.log : console.error)(out.text);
     process.exitCode = out.exitCode;
+});
+const hooksCmd = program.command('hooks').description('Manage Claude Code hook registration');
+hooksCmd
+    .command('install')
+    .description('Register kodemux hooks in .claude/settings.json (additive, idempotent)')
+    .option('-g, --global', 'install into ~/.claude/settings.json instead of the project', false)
+    .action((opts) => {
+    const out = installHooks(process.cwd(), { global: opts.global });
+    (out.exitCode === 0 ? console.log : console.error)(out.text);
+    process.exitCode = out.exitCode;
+});
+/** Read all of stdin (Claude Code pipes the hook payload as JSON on stdin). */
+async function readStdin() {
+    const chunks = [];
+    for await (const chunk of process.stdin)
+        chunks.push(chunk);
+    return Buffer.concat(chunks).toString('utf8');
+}
+program
+    .command('hook')
+    .description('Claude Code hook entrypoint: reads a JSON payload from stdin and dispatches it')
+    .argument('<event>', 'user-prompt-submit | pre-tool-use')
+    .action(async (event) => {
+    const raw = await readStdin();
+    let payload = {};
+    try {
+        payload = raw.trim() ? JSON.parse(raw) : {};
+    }
+    catch {
+        payload = {};
+    }
+    let result;
+    if (event === 'user-prompt-submit') {
+        result = await userPromptSubmitHook(payload);
+    }
+    else if (event === 'pre-tool-use') {
+        result = await preToolUseHook(payload);
+    }
+    else {
+        console.error(`kodemux hook: unknown event '${event}' (expected user-prompt-submit | pre-tool-use)`);
+        process.exitCode = 1;
+        return;
+    }
+    if (result.stdout)
+        console.log(result.stdout);
+    if (result.stderr)
+        console.error(result.stderr);
+    process.exitCode = result.exitCode;
 });
 program.parseAsync(process.argv).catch((err) => {
     const msg = err instanceof Error ? err.message : String(err);
