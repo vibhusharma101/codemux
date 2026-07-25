@@ -22,6 +22,23 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **`pack/`** — a zero-install, copy-paste alternative for repos that don't want
   the Node CLI: the same routing rubric as a markdown skill plus two small
   shell/PowerShell scripts, dropped straight into a project's `.claude/`.
+- **Every recommendation now states the agent count explicitly, even when it's 1**
+  — the CLI's `route` output, the `UserPromptSubmit` hook context, and the
+  `pack/` skill's output template all used to only mention parallel agents in
+  `multi-agent` mode, silently omitting the line otherwise. Now every response
+  says `agents: 1 — do not parallelize` or `agents: N — genuinely
+  parallelizable`, so it's never ambiguous whether to fan out.
+
+### Fixed
+
+- **CI has been red on every run since the repo's first commit.** `npm test`
+  passed a quoted glob (`"test/**/*.test.ts"`) as a literal string to `node
+  --test`; whether that resolves depends on the exact Node patch version, and
+  GitHub Actions' runners didn't support it, so `npm test` failed immediately
+  in CI (`Could not find '.../test/**/*.test.ts'`) while working locally.
+  Switched to an **unquoted** glob (`test/*.test.ts`) so the shell expands it
+  to real file paths before Node ever sees a glob string — portable across
+  Node versions and shells.
 
 ## [0.4.6] - 2026-07-25
 
