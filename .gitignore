@@ -33,3 +33,6 @@ coverage/
 
 # vii-stack local artifacts
 .vii/
+
+# Personal planning docs — not for the public repo
+/MARKETING-PLAN.md
