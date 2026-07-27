@@ -43,9 +43,24 @@ export interface RouteResult {
     escalation: Escalation | null;
     /** True when an AiHint was applied (and actually contributed to the score). */
     aiAssisted: boolean;
+    /** True when a developer-supplied cap (RouteCap) actually lowered the tier
+     *  and/or effort below what complexity/risk alone would have picked. */
+    capped: boolean;
     /** Agent-facing directives, e.g. `/model claude-opus-4-8`, `/effort xhigh`. */
     directives: string[];
     reasons: string[];
+}
+/**
+ * Per-invocation ceiling a developer can set for a single prompt (e.g. the CLI's
+ * `--max-tier` / `--max-effort` flags), without touching the persisted config.
+ * The router still runs its full analysis — a cap only clamps the *result*
+ * downward afterward, it never raises anything.
+ */
+export interface RouteCap {
+    /** Never route above this tier, even if complexity/risk would call for one. */
+    maxTier?: Tier;
+    /** Clamp the chosen effort to at most this level on the global low→max scale. */
+    maxEffort?: Effort;
 }
 /**
  * Build the ordered directive list. Omits `/effort` when the model has none,
@@ -67,7 +82,12 @@ export declare function recommendParallelism(a: Analysis, mode: Mode, fileCount:
  * the deterministic analysis remains the floor and this function stays a pure,
  * synchronous, fully-testable calculation regardless of how the hint was
  * obtained.
+ *
+ * `cap` is the opposite lever: an optional developer-supplied ceiling for this
+ * one invocation (never persisted). It runs *after* the full analysis and only
+ * clamps the outcome downward — it can lower the tier/effort the router would
+ * otherwise have picked, but never raise it above what the analysis produced.
  */
 export declare function route(prompt: string, config?: {
     router: RouterPolicy;
-}, signals?: Signals, aiHint?: AiHint): RouteResult;
+}, signals?: Signals, aiHint?: AiHint, cap?: RouteCap): RouteResult;

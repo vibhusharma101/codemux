@@ -9,12 +9,17 @@
  * default) consults a cheap Haiku judge — reusing whatever Anthropic
  * credentials are already configured — before falling back to the plain
  * escalation cascade. `--no-ai` disables this step.
+ *
+ * `--max-tier` / `--max-effort` let a developer cap the routed tier/effort
+ * for this one prompt without editing `.kodemux/config.json` — the router
+ * still runs its full analysis, the cap only clamps the result downward.
  */
 import { loadConfig } from '../config.js';
-import { route, type RouteResult } from '../router.js';
+import { route, type RouteCap, type RouteResult } from '../router.js';
 import { repoContext } from '../git.js';
 import { judgeComplexity, type JudgeOutcome } from '../ai-judge.js';
 import type { Signals } from '../classify.js';
+import { EFFORTS, TIERS, type Effort, type Tier } from '../constants/models.js';
 
 export interface RouteCommandOptions {
   files?: string;
@@ -26,6 +31,10 @@ export interface RouteCommandOptions {
   git?: boolean;
   /** Commander sets this to false for `--no-ai`. */
   ai?: boolean;
+  /** Cap the routed tier at or below this, for this invocation only. */
+  maxTier?: string;
+  /** Cap the effort directive at or below this, for this invocation only. */
+  maxEffort?: string;
 }
 
 export interface RouteCommandOutput {
@@ -54,6 +63,26 @@ export async function runRoute(
     return { text: 'kodemux route: a prompt is required', exitCode: 1 };
   }
 
+  let cap: RouteCap | undefined;
+  if (opts.maxTier !== undefined) {
+    if (!TIERS.includes(opts.maxTier as Tier)) {
+      return {
+        text: `kodemux route: --max-tier must be one of ${TIERS.join(', ')}`,
+        exitCode: 1,
+      };
+    }
+    cap = { ...cap, maxTier: opts.maxTier as Tier };
+  }
+  if (opts.maxEffort !== undefined) {
+    if (!EFFORTS.includes(opts.maxEffort as Effort)) {
+      return {
+        text: `kodemux route: --max-effort must be one of ${EFFORTS.join(', ')}`,
+        exitCode: 1,
+      };
+    }
+    cap = { ...cap, maxEffort: opts.maxEffort as Effort };
+  }
+
   const config = loadConfig(cwd) ?? undefined;
 
   const useGit = opts.git !== false;
@@ -68,7 +97,7 @@ export async function runRoute(
 
   if (ctx && ctx.paths.length) signals.paths = ctx.paths;
 
-  let result: RouteResult = route(prompt, config, signals);
+  let result: RouteResult = route(prompt, config, signals, undefined, cap);
   let judgeOutcome: JudgeOutcome | null = null;
 
   const aiEnabled = opts.ai !== false && (config?.router.aiAssist ?? true);
@@ -77,11 +106,17 @@ export async function runRoute(
     const judge = deps.judge ?? judgeComplexity;
     judgeOutcome = await judge(prompt, signals);
     if (judgeOutcome.ok) {
-      result = route(prompt, config, signals, {
-        complexity: judgeOutcome.result.complexity,
-        risks: judgeOutcome.result.risks,
-        rationale: judgeOutcome.result.rationale,
-      });
+      result = route(
+        prompt,
+        config,
+        signals,
+        {
+          complexity: judgeOutcome.result.complexity,
+          risks: judgeOutcome.result.risks,
+          rationale: judgeOutcome.result.rationale,
+        },
+        cap,
+      );
     }
   }
 
@@ -101,7 +136,7 @@ export async function runRoute(
   const lines = [
     `intent      ${result.intent}`,
     `complexity  ${result.complexity}/14`,
-    `tier        ${result.tier}${result.risks.length ? `  [risk: ${result.risks.join(', ')}]` : ''}`,
+    `tier        ${result.tier}${result.risks.length ? `  [risk: ${result.risks.join(', ')}]` : ''}${result.capped ? '  (capped — see "why")' : ''}`,
     `confidence  ${result.confidence}${result.aiAssisted ? '  (ai-assisted)' : ''}`,
   ];
 

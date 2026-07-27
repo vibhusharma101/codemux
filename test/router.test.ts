@@ -92,6 +92,50 @@ test('a large, wide-scope task fans out to multiple parallel agents', () => {
   assert.ok(r.directives.includes(`/agents ${r.parallelAgents}`));
 });
 
+test('--max-tier caps a route that would otherwise go higher', () => {
+  const uncapped = route('redesign the module architecture');
+  assert.equal(uncapped.tier, 'complex');
+  assert.equal(uncapped.capped, false);
+
+  const capped = route('redesign the module architecture', undefined, {}, undefined, {
+    maxTier: 'standard',
+  });
+  assert.equal(capped.tier, 'standard');
+  assert.equal(capped.target.model, MODELS.SONNET_5);
+  assert.equal(capped.capped, true);
+  assert.ok(capped.reasons.some((r) => r.includes('developer cap') && r.includes('--max-tier')));
+});
+
+test('--max-tier never raises a route that would naturally be lower', () => {
+  const r = route('fix a typo in the README', undefined, {}, undefined, { maxTier: 'frontier' });
+  assert.equal(r.tier, 'simple');
+  assert.equal(r.capped, false);
+});
+
+test('--max-effort clamps the effort directive without changing the tier', () => {
+  const r = route('run a security audit for OWASP vulnerabilities', undefined, {}, undefined, {
+    maxEffort: 'medium',
+  });
+  assert.equal(r.target.model, MODELS.OPUS_4_8); // risk floor still applies
+  assert.equal(r.target.effort, 'medium');
+  assert.equal(r.capped, true);
+});
+
+test('a cap suppresses escalation past the ceiling', () => {
+  const uncapped = route('touch the concurrency thing but keep it a small rename');
+  assert.ok(uncapped.escalation);
+
+  const capped = route(
+    'touch the concurrency thing but keep it a small rename',
+    undefined,
+    {},
+    undefined,
+    { maxTier: uncapped.tier },
+  );
+  assert.equal(capped.escalation, null);
+  assert.ok(capped.reasons.some((r) => r.includes('escalation is blocked')));
+});
+
 test('touching a critical path floors the tier even with innocuous wording', () => {
   // wording alone would route to `simple`/`standard`; the auth path forces up.
   const r = route('tweak a default value', undefined, { paths: ['src/auth/session.ts'] });

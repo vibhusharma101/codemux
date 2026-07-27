@@ -11,6 +11,7 @@ import { runGuard } from './commands/guard.js';
 import { runPost } from './commands/post.js';
 import { installHooks } from './commands/hooks-install.js';
 import { userPromptSubmitHook, preToolUseHook } from './hook-adapters.js';
+import { EFFORTS, TIERS } from './constants/models.js';
 const require = createRequire(import.meta.url);
 const pkg = require('../package.json');
 const program = new Command();
@@ -43,6 +44,8 @@ program
     .option('--base <ref>', 'diff against a base ref (e.g. main) instead of the working tree')
     .option('--no-git', 'disable automatic git context detection')
     .option('--no-ai', 'disable AI-assisted escalation for low-confidence routes')
+    .option('--max-tier <tier>', `cap the routed tier at or below this for this prompt only (${TIERS.join('|')})`)
+    .option('--max-effort <effort>', `cap the effort directive at or below this for this prompt only (${EFFORTS.join('|')})`)
     .option('--json', 'emit machine-readable JSON', false)
     .action(async (prompt, opts) => {
     const out = await runRoute(process.cwd(), prompt, opts);

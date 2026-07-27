@@ -3,7 +3,7 @@
  * ladder, with a confidence estimate and an escalation (cascade) recommendation.
  */
 import { analyze } from './classify.js';
-import { TIERS, tierIndex, } from './constants/models.js';
+import { EFFORTS, TIERS, tierIndex, } from './constants/models.js';
 import { defaultRouterPolicy } from './config.js';
 import { matchesAny } from './glob.js';
 /**
@@ -131,8 +131,13 @@ function chooseMode(a, tier) {
  * the deterministic analysis remains the floor and this function stays a pure,
  * synchronous, fully-testable calculation regardless of how the hint was
  * obtained.
+ *
+ * `cap` is the opposite lever: an optional developer-supplied ceiling for this
+ * one invocation (never persisted). It runs *after* the full analysis and only
+ * clamps the outcome downward — it can lower the tier/effort the router would
+ * otherwise have picked, but never raise it above what the analysis produced.
  */
-export function route(prompt, config, signals = {}, aiHint) {
+export function route(prompt, config, signals = {}, aiHint, cap) {
     const p = config?.router ?? defaultRouterPolicy();
     const a = analyze(prompt, signals);
     // Merge prompt-derived risks with critical-path risk from the actual diff,
@@ -157,13 +162,28 @@ export function route(prompt, config, signals = {}, aiHint) {
         tier = maxTier(tier, floor);
     if (risks.length)
         tier = maxTier(tier, p.riskFloor);
+    // Developer cap (--max-tier): clamps downward only, applied after the full
+    // analysis so the "why" always reflects what the router actually wanted.
+    const uncappedTier = tier;
+    let tierCapped = false;
+    if (cap?.maxTier && tierIndex(cap.maxTier) < tierIndex(tier)) {
+        tier = cap.maxTier;
+        tierCapped = true;
+    }
     const spec = p.tiers[tier];
     // Boosted effort at the top of a band or when risk is present. `efforts`
     // falls back defensively so a hand-built policy missing the field can't crash.
     const efforts = spec.efforts ?? [null, null];
     const upperBand = complexity >= (p.thresholds.frontier + p.thresholds.complex) / 2;
     const boost = risks.length > 0 || upperBand || (a.multiStep && tierIndex(tier) >= tierIndex('complex'));
-    const effort = efforts[boost ? 1 : 0] ?? efforts[0] ?? null;
+    let effort = efforts[boost ? 1 : 0] ?? efforts[0] ?? null;
+    // Developer cap (--max-effort): same downward-only clamp, on the global
+    // low→max effort scale rather than the tier's own [base, boosted] pair.
+    let effortCapped = false;
+    if (effort && cap?.maxEffort && EFFORTS.indexOf(cap.maxEffort) < EFFORTS.indexOf(effort)) {
+        effort = cap.maxEffort;
+        effortCapped = true;
+    }
     const mode = chooseMode(a, tier);
     const target = { model: spec.model, effort, mode };
     const parallelAgents = recommendParallelism(a, mode, signals.fileCount);
@@ -171,16 +191,23 @@ export function route(prompt, config, signals = {}, aiHint) {
     // treat the merged decision as confident rather than re-scoring the
     // (now-stale) text-only signal.
     const confidence = aiAssisted ? AI_ASSISTED_CONFIDENCE : estimateConfidence(a, complexity, p);
-    // Escalation (cascade): recommend the next tier up when unsure.
+    // Escalation (cascade): recommend the next tier up when unsure — but never
+    // recommend past a developer-supplied cap; that would defeat the point of it.
     let escalation = null;
+    let escalationBlockedByCap = false;
     const idx = tierIndex(tier);
     if (idx < TIERS.length - 1 && confidence < p.escalateBelowConfidence) {
         const next = TIERS[idx + 1];
-        escalation = {
-            model: p.tiers[next].model,
-            tier: next,
-            trigger: 'if the agent stalls, reports low confidence, or the change proves larger than estimated',
-        };
+        if (cap?.maxTier && tierIndex(next) > tierIndex(cap.maxTier)) {
+            escalationBlockedByCap = true;
+        }
+        else {
+            escalation = {
+                model: p.tiers[next].model,
+                tier: next,
+                trigger: 'if the agent stalls, reports low confidence, or the change proves larger than estimated',
+            };
+        }
     }
     const reasons = [...a.reasons];
     if (criticalHits.length) {
@@ -191,6 +218,15 @@ export function route(prompt, config, signals = {}, aiHint) {
         reasons.push(`ai-assist (haiku): complexity ${aiHint.complexity}${raised}${aiHint.rationale ? ` — ${aiHint.rationale}` : ''}`);
     }
     reasons.unshift(`complexity ${complexity} + ${risks.length ? `risk[${risks.join(',')}] ` : ''}intent ${a.intent} → ${tier} tier`);
+    if (tierCapped) {
+        reasons.push(`developer cap: router would pick ${uncappedTier} tier, capped to ${tier} (--max-tier ${cap.maxTier})`);
+    }
+    if (effortCapped) {
+        reasons.push(`developer cap: effort capped to ${effort} (--max-effort ${cap.maxEffort})`);
+    }
+    if (escalationBlockedByCap) {
+        reasons.push(`confidence is low but escalation is blocked by --max-tier ${cap.maxTier} — review manually or raise the cap`);
+    }
     if (mode === 'multi-agent') {
         reasons.push(`parallelizable work → fan out to ${parallelAgents} agents`);
     }
@@ -204,6 +240,7 @@ export function route(prompt, config, signals = {}, aiHint) {
         confidence,
         escalation,
         aiAssisted,
+        capped: tierCapped || effortCapped,
         directives: directivesFor(target, parallelAgents),
         reasons,
     };

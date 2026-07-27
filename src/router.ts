@@ -4,6 +4,7 @@
  */
 import { analyze, type Analysis, type RiskFlag, type Signals } from './classify.js';
 import {
+  EFFORTS,
   TIERS,
   tierIndex,
   type Effort,
@@ -56,9 +57,25 @@ export interface RouteResult {
   escalation: Escalation | null;
   /** True when an AiHint was applied (and actually contributed to the score). */
   aiAssisted: boolean;
+  /** True when a developer-supplied cap (RouteCap) actually lowered the tier
+   *  and/or effort below what complexity/risk alone would have picked. */
+  capped: boolean;
   /** Agent-facing directives, e.g. `/model claude-opus-4-8`, `/effort xhigh`. */
   directives: string[];
   reasons: string[];
+}
+
+/**
+ * Per-invocation ceiling a developer can set for a single prompt (e.g. the CLI's
+ * `--max-tier` / `--max-effort` flags), without touching the persisted config.
+ * The router still runs its full analysis — a cap only clamps the *result*
+ * downward afterward, it never raises anything.
+ */
+export interface RouteCap {
+  /** Never route above this tier, even if complexity/risk would call for one. */
+  maxTier?: Tier;
+  /** Clamp the chosen effort to at most this level on the global low→max scale. */
+  maxEffort?: Effort;
 }
 
 /**
@@ -188,12 +205,18 @@ function chooseMode(a: Analysis, tier: Tier): Mode {
  * the deterministic analysis remains the floor and this function stays a pure,
  * synchronous, fully-testable calculation regardless of how the hint was
  * obtained.
+ *
+ * `cap` is the opposite lever: an optional developer-supplied ceiling for this
+ * one invocation (never persisted). It runs *after* the full analysis and only
+ * clamps the outcome downward — it can lower the tier/effort the router would
+ * otherwise have picked, but never raise it above what the analysis produced.
  */
 export function route(
   prompt: string,
   config?: { router: RouterPolicy },
   signals: Signals = {},
   aiHint?: AiHint,
+  cap?: RouteCap,
 ): RouteResult {
   const p = config?.router ?? defaultRouterPolicy();
   const a = analyze(prompt, signals);
@@ -220,6 +243,15 @@ export function route(
   if (floor) tier = maxTier(tier, floor);
   if (risks.length) tier = maxTier(tier, p.riskFloor);
 
+  // Developer cap (--max-tier): clamps downward only, applied after the full
+  // analysis so the "why" always reflects what the router actually wanted.
+  const uncappedTier = tier;
+  let tierCapped = false;
+  if (cap?.maxTier && tierIndex(cap.maxTier) < tierIndex(tier)) {
+    tier = cap.maxTier;
+    tierCapped = true;
+  }
+
   const spec = p.tiers[tier];
 
   // Boosted effort at the top of a band or when risk is present. `efforts`
@@ -227,7 +259,15 @@ export function route(
   const efforts = spec.efforts ?? [null, null];
   const upperBand = complexity >= (p.thresholds.frontier + p.thresholds.complex) / 2;
   const boost = risks.length > 0 || upperBand || (a.multiStep && tierIndex(tier) >= tierIndex('complex'));
-  const effort = efforts[boost ? 1 : 0] ?? efforts[0] ?? null;
+  let effort = efforts[boost ? 1 : 0] ?? efforts[0] ?? null;
+
+  // Developer cap (--max-effort): same downward-only clamp, on the global
+  // low→max effort scale rather than the tier's own [base, boosted] pair.
+  let effortCapped = false;
+  if (effort && cap?.maxEffort && EFFORTS.indexOf(cap.maxEffort) < EFFORTS.indexOf(effort)) {
+    effort = cap.maxEffort;
+    effortCapped = true;
+  }
 
   const mode = chooseMode(a, tier);
   const target: RouteTarget = { model: spec.model, effort, mode };
@@ -238,17 +278,23 @@ export function route(
   // (now-stale) text-only signal.
   const confidence = aiAssisted ? AI_ASSISTED_CONFIDENCE : estimateConfidence(a, complexity, p);
 
-  // Escalation (cascade): recommend the next tier up when unsure.
+  // Escalation (cascade): recommend the next tier up when unsure — but never
+  // recommend past a developer-supplied cap; that would defeat the point of it.
   let escalation: Escalation | null = null;
+  let escalationBlockedByCap = false;
   const idx = tierIndex(tier);
   if (idx < TIERS.length - 1 && confidence < p.escalateBelowConfidence) {
     const next = TIERS[idx + 1]!;
-    escalation = {
-      model: p.tiers[next].model,
-      tier: next,
-      trigger:
-        'if the agent stalls, reports low confidence, or the change proves larger than estimated',
-    };
+    if (cap?.maxTier && tierIndex(next) > tierIndex(cap.maxTier)) {
+      escalationBlockedByCap = true;
+    } else {
+      escalation = {
+        model: p.tiers[next].model,
+        tier: next,
+        trigger:
+          'if the agent stalls, reports low confidence, or the change proves larger than estimated',
+      };
+    }
   }
 
   const reasons = [...a.reasons];
@@ -264,6 +310,19 @@ export function route(
   reasons.unshift(
     `complexity ${complexity} + ${risks.length ? `risk[${risks.join(',')}] ` : ''}intent ${a.intent} → ${tier} tier`,
   );
+  if (tierCapped) {
+    reasons.push(
+      `developer cap: router would pick ${uncappedTier} tier, capped to ${tier} (--max-tier ${cap!.maxTier})`,
+    );
+  }
+  if (effortCapped) {
+    reasons.push(`developer cap: effort capped to ${effort} (--max-effort ${cap!.maxEffort})`);
+  }
+  if (escalationBlockedByCap) {
+    reasons.push(
+      `confidence is low but escalation is blocked by --max-tier ${cap!.maxTier} — review manually or raise the cap`,
+    );
+  }
   if (mode === 'multi-agent') {
     reasons.push(`parallelizable work → fan out to ${parallelAgents} agents`);
   }
@@ -278,6 +337,7 @@ export function route(
     confidence,
     escalation,
     aiAssisted,
+    capped: tierCapped || effortCapped,
     directives: directivesFor(target, parallelAgents),
     reasons,
   };

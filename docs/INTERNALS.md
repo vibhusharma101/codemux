@@ -317,6 +317,33 @@ silently picking a possibly-underpowered model, it tells the caller exactly when
 to bail up a tier. §5.8 below is the *other* answer — get a real opinion instead
 of just flagging the uncertainty.
 
+### 5.7a Developer cap — `--max-tier` / `--max-effort`
+
+Escalation answers "how do I go higher when I'm unsure"; the cap is the inverse
+lever — "how do I put a ceiling on this one prompt" — for a developer who knows
+better than the router does (e.g. "I've reviewed this, Sonnet at medium is
+plenty, don't let it jump to Opus just because the diff is large").
+
+`route()` takes an optional 5th `cap` argument — `{ maxTier?, maxEffort? }` —
+applied *after* the full deterministic (and AI-assisted, if it ran) analysis,
+so it never distorts the score itself. It only clamps the final result
+downward:
+
+- `maxTier` — if the computed tier sits above `maxTier` on the ladder, the
+  result is pulled down to `maxTier`. It never pushes a route *up* to the cap.
+- `maxEffort` — same clamp, but on the global `low → medium → high → xhigh →
+  max` scale rather than a tier's own `[base, boosted]` pair.
+- A binding cap also suppresses escalation past the ceiling (recommending a
+  tier the developer just explicitly capped away would defeat the point), and
+  sets `capped: true` on the result. The `reasons` array always states what
+  the router would have picked uncapped, so the decision stays auditable.
+
+This is not persisted config — it's a per-invocation override, exposed on the
+CLI as `kodemux route "<prompt>" --max-tier standard` /
+`--max-effort medium`. Full custom routing policy (persistent, prompt-agnostic
+rules) still belongs in `.kodemux/config.json`'s `router.tiers` /
+`router.thresholds`, or in a project's routing skill.
+
 ### 5.8 AI-assisted escalation — a cheap, optional second opinion
 
 The deterministic pass only sees surface signals: keywords, scope, file counts.
