@@ -102,6 +102,70 @@ test('runRoute recommends fanning out for genuinely parallelizable work', async 
   }
 });
 
+test('--max-tier caps the route for this invocation only', async () => {
+  const { dir, cleanup } = tempRepo();
+  try {
+    const out = await runRoute(dir, 'redesign the module architecture', {
+      maxTier: 'standard',
+      json: true,
+      git: false,
+      ai: false,
+    });
+    const parsed = JSON.parse(out.text);
+    assert.equal(parsed.tier, 'standard');
+    assert.equal(parsed.capped, true);
+  } finally {
+    cleanup();
+  }
+});
+
+test('--max-effort caps the effort directive', async () => {
+  const { dir, cleanup } = tempRepo();
+  try {
+    const out = await runRoute(dir, 'run a security audit for OWASP vulnerabilities', {
+      maxEffort: 'medium',
+      json: true,
+      git: false,
+      ai: false,
+    });
+    const parsed = JSON.parse(out.text);
+    assert.equal(parsed.target.effort, 'medium');
+    assert.equal(parsed.capped, true);
+  } finally {
+    cleanup();
+  }
+});
+
+test('an invalid --max-tier value errors instead of routing', async () => {
+  const { dir, cleanup } = tempRepo();
+  try {
+    const out = await runRoute(dir, 'add a feature', {
+      maxTier: 'nonsense',
+      git: false,
+      ai: false,
+    });
+    assert.equal(out.exitCode, 1);
+    assert.match(out.text, /--max-tier must be one of/);
+  } finally {
+    cleanup();
+  }
+});
+
+test('an invalid --max-effort value errors instead of routing', async () => {
+  const { dir, cleanup } = tempRepo();
+  try {
+    const out = await runRoute(dir, 'add a feature', {
+      maxEffort: 'ultra',
+      git: false,
+      ai: false,
+    });
+    assert.equal(out.exitCode, 1);
+    assert.match(out.text, /--max-effort must be one of/);
+  } finally {
+    cleanup();
+  }
+});
+
 // --- AI-assist orchestration (injected judge — no real network) ---
 
 test('a confident deterministic result never calls the judge', async () => {

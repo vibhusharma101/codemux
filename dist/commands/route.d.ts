@@ -9,6 +9,10 @@ export interface RouteCommandOptions {
     git?: boolean;
     /** Commander sets this to false for `--no-ai`. */
     ai?: boolean;
+    /** Cap the routed tier at or below this, for this invocation only. */
+    maxTier?: string;
+    /** Cap the effort directive at or below this, for this invocation only. */
+    maxEffort?: string;
 }
 export interface RouteCommandOutput {
     text: string;

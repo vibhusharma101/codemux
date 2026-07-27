@@ -55,6 +55,18 @@ kodemux scan                               # secrets scan of your changed files
 `kodemux route` reads your actual `git diff` automatically, so results reflect
 what's really changed — not just the words in your prompt.
 
+Need a cost ceiling on one specific prompt without editing config? Cap it for
+that invocation only:
+
+```sh
+kodemux route "redesign the module architecture" --max-tier standard
+kodemux route "run a security audit" --max-effort medium
+```
+
+The router still runs its full analysis — the cap only clamps the result
+downward (it can never push you to a *more* expensive tier), and the `why`
+section always shows what it would have picked uncapped.
+
 **Updating later:** `git pull` inside the cloned kodemux folder — no reinstall
 needed. **Removing:** `npm rm -g kodemux`.
 
@@ -158,7 +170,7 @@ kodemux post                              # plan scoped format/lint/test
 | Command | Purpose |
 | --- | --- |
 | `kodemux init [--force]` | Detect the repo stack and scaffold `.kodemux/` (config + synthesized `CLAUDE.md`). |
-| `kodemux route <prompt> [--files n] [--diff-lines n] [--base ref] [--no-git] [--no-ai] [--json]` | Read git context, estimate complexity, pick a tier on the capability ladder, and emit `/model` · `/effort` · `/mode` (· `/agents N`) directives with a confidence + escalation. Consults a cheap AI judge for low-confidence routes unless `--no-ai`. |
+| `kodemux route <prompt> [--files n] [--diff-lines n] [--base ref] [--no-git] [--no-ai] [--max-tier tier] [--max-effort level] [--json]` | Read git context, estimate complexity, pick a tier on the capability ladder, and emit `/model` · `/effort` · `/mode` (· `/agents N`) directives with a confidence + escalation. Consults a cheap AI judge for low-confidence routes unless `--no-ai`. `--max-tier`/`--max-effort` cap the result for this one prompt without touching config. |
 | `kodemux guard` | **Pre-hook.** Refuse direct edits on a protected branch. Exit 1 to block. |
 | `kodemux scan [--json]` | **Pre-hook.** Scan changed files for secret-shaped strings. Exit 1 on a hit. |
 | `kodemux post [--run] [--json]` | **Post-hook.** Plan (dry-run) or run scoped format/lint/test for changed files. |

@@ -4,6 +4,23 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres
 to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.0] - 2026-07-27
+
+### Added
+
+- **`kodemux route` per-prompt cap: `--max-tier <tier>` / `--max-effort <level>`.**
+  Straight from user feedback ("can the developer pin or cap model and effort
+  for one prompt, or does the router always have final say?") — the router
+  still runs its full deterministic (and AI-assisted, if triggered) analysis,
+  but a developer can now clamp the result downward for a single invocation
+  without touching `.kodemux/config.json`. `--max-tier` caps the routed tier
+  on the capability ladder; `--max-effort` caps the effort directive on the
+  global low→max scale. A binding cap also suppresses escalation past the
+  ceiling and sets `capped: true` on the result, and the `why` output always
+  states what the router would have picked uncapped, so the decision stays
+  auditable. `route()` gained an optional 5th `cap` argument for programmatic
+  callers; see `docs/INTERNALS.md` §5.7a.
+
 ## [0.5.0] - 2026-07-25
 
 ### Added
