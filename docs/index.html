@@ -308,6 +308,7 @@
             </label>
             <p class="note">In the CLI these numbers are read automatically from <code>git diff</code>, and the critical-path flag fires on the real changed files — here you drive them by hand. All signals are additive.</p>
             <p class="note">This page demonstrates the free, instant deterministic core only. The CLI also has an optional AI-assist step (<code>--no-ai</code> to disable) that consults a cheap Haiku judge — reusing your existing Anthropic credentials, no setup — whenever this confidence score drops low; a static page can't safely make that call, so it isn't shown here. See <a href="https://github.com/vibhusharma101/kodemux/blob/main/docs/INTERNALS.md#58-ai-assisted-escalation--a-cheap-optional-second-opinion">docs/INTERNALS.md §5.8</a>.</p>
+            <p class="note">New in v0.6.0: <code>--max-tier</code> / <code>--max-effort</code> let you cap the routed tier/effort for one prompt without touching config — the router still runs this full analysis, the cap just clamps the result downward. CLI-only (no UI here to keep this page a pure "what would it pick" demo). See <a href="https://github.com/vibhusharma101/kodemux/blob/main/docs/INTERNALS.md">docs/INTERNALS.md §5.7a</a>.</p>
           </div>
 
           <div class="router-out">
