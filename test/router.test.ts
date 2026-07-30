@@ -30,14 +30,14 @@ test('an everyday feature routes to the standard tier (Sonnet) with a plan', () 
 test('security work floors at the complex tier and audits are read-only', () => {
   const r = route('run a security audit for OWASP vulnerabilities');
   assert.ok(r.risks.includes('security'));
-  assert.equal(r.target.model, MODELS.OPUS_4_8); // risk floor = complex
+  assert.equal(r.target.model, MODELS.OPUS_5); // risk floor = complex
   assert.equal(r.target.mode, 'read-only');
 });
 
 test('architecture intent floors at the complex tier', () => {
   const r = route('redesign the module architecture');
   assert.equal(r.tier, 'complex');
-  assert.equal(r.target.model, MODELS.OPUS_4_8);
+  assert.equal(r.target.model, MODELS.OPUS_5);
 });
 
 test('low confidence produces an escalation recommendation', () => {
@@ -60,10 +60,10 @@ test('repo signals alone can push a vague prompt to a higher tier', () => {
 
 test('config overrides are respected (tier model + thresholds)', () => {
   const cfg = defaultConfig(['node']);
-  cfg.router.tiers.standard.model = MODELS.OPUS_4_8;
+  cfg.router.tiers.standard.model = MODELS.OPUS_5;
   const r = route('add a small feature', cfg);
   assert.equal(r.tier, 'standard');
-  assert.equal(r.target.model, MODELS.OPUS_4_8);
+  assert.equal(r.target.model, MODELS.OPUS_5);
 });
 
 test('a tier policy missing efforts does not crash the router', () => {
@@ -116,7 +116,7 @@ test('--max-effort clamps the effort directive without changing the tier', () =>
   const r = route('run a security audit for OWASP vulnerabilities', undefined, {}, undefined, {
     maxEffort: 'medium',
   });
-  assert.equal(r.target.model, MODELS.OPUS_4_8); // risk floor still applies
+  assert.equal(r.target.model, MODELS.OPUS_5); // risk floor still applies
   assert.equal(r.target.effort, 'medium');
   assert.equal(r.capped, true);
 });
@@ -140,7 +140,7 @@ test('touching a critical path floors the tier even with innocuous wording', () 
   // wording alone would route to `simple`/`standard`; the auth path forces up.
   const r = route('tweak a default value', undefined, { paths: ['src/auth/session.ts'] });
   assert.ok(r.risks.includes('critical'));
-  assert.equal(r.target.model, MODELS.OPUS_4_8); // risk floor = complex
+  assert.equal(r.target.model, MODELS.OPUS_5); // risk floor = complex
 });
 
 test('a non-critical path adds no risk', () => {
@@ -167,7 +167,7 @@ test('aiHint can raise the tier but never lower it', () => {
 test('aiHint risk flags merge with deterministic risks and floor the tier', () => {
   const r = route('tweak a default value', undefined, {}, { complexity: 1, risks: ['security'] });
   assert.ok(r.risks.includes('security'));
-  assert.equal(r.target.model, MODELS.OPUS_4_8);
+  assert.equal(r.target.model, MODELS.OPUS_5);
 });
 
 test('aiHint sets aiAssisted and boosts confidence past the escalation threshold', () => {

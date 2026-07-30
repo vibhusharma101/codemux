@@ -46,6 +46,11 @@ export async function userPromptSubmitHook(payload) {
         CONTEXT_HEADER,
         `  tier ${decision.tier} · model ${decision.target?.model} · effort ${effort ?? 'n/a'} · mode ${decision.target?.mode}`,
     ];
+    // Worth flagging only when the repo is configured for a different agent —
+    // the models named above would then be Codex's, not Claude Code's.
+    if (decision.provider && decision.provider !== 'claude') {
+        lines.push(`  note: this repo routes on the ${decision.provider} ladder, so the model above is a ${decision.provider} model`);
+    }
     if (decision.risks && decision.risks.length) {
         lines.push(`  risk flags: ${decision.risks.join(', ')}`);
     }

@@ -3,7 +3,7 @@
  * ladder, with a confidence estimate and an escalation (cascade) recommendation.
  */
 import { type Analysis, type RiskFlag, type Signals } from './classify.js';
-import { type Effort, type Intent, type Mode, type ModelId, type Tier } from './constants/models.js';
+import { type Effort, type Intent, type Mode, type ModelId, type Provider, type Tier } from './constants/models.js';
 import { type RouterPolicy } from './config.js';
 export interface RouteTarget {
     model: ModelId;
@@ -14,6 +14,12 @@ export interface RouteTarget {
 export interface Escalation {
     model: ModelId;
     tier: Tier;
+    /**
+     * Boosted effort of the recommended tier. Carried explicitly because a ladder
+     * can repeat a model across two rungs (Codex's `sol` is both `complex` and
+     * `frontier`) — without the effort, such an escalation reads as a no-op.
+     */
+    effort: Effort | null;
     trigger: string;
 }
 /**
@@ -29,6 +35,8 @@ export interface AiHint {
 export interface RouteResult {
     intent: Intent;
     complexity: number;
+    /** Which agent the directives are written for (`claude` | `codex`). */
+    provider: Provider;
     tier: Tier;
     risks: RiskFlag[];
     target: RouteTarget;
@@ -46,8 +54,14 @@ export interface RouteResult {
     /** True when a developer-supplied cap (RouteCap) actually lowered the tier
      *  and/or effort below what complexity/risk alone would have picked. */
     capped: boolean;
-    /** Agent-facing directives, e.g. `/model claude-opus-4-8`, `/effort xhigh`. */
+    /** Agent-facing directives, e.g. `/model claude-opus-5`, `/effort xhigh`. */
     directives: string[];
+    /**
+     * Ready-to-run shell invocation, when the provider's CLI can express the
+     * whole decision as flags (Codex). `null` for providers where model/effort
+     * are session directives rather than launch flags (Claude Code).
+     */
+    invocation: string | null;
     reasons: string[];
 }
 /**
@@ -63,10 +77,14 @@ export interface RouteCap {
     maxEffort?: Effort;
 }
 /**
- * Build the ordered directive list. Omits `/effort` when the model has none,
- * and appends `/agents N` only when multi-agent mode recommends parallelism.
+ * Build the ordered directive list for the target provider.
+ *
+ * Claude Code takes model, effort and mode as separate slash commands. The
+ * Codex CLI's `/model` picker sets model *and* reasoning effort in one command,
+ * has `/approvals` rather than modes, and has no subagent fan-out — so the
+ * parallel and plan decisions are emitted as plain guidance there.
  */
-export declare function directivesFor(target: RouteTarget, parallelAgents?: number): string[];
+export declare function directivesFor(target: RouteTarget, parallelAgents?: number, provider?: Provider): string[];
 /**
  * Recommend how many agents to fan out in parallel. Only meaningful in
  * multi-agent mode; scales with independent workstreams (files, steps, scope)

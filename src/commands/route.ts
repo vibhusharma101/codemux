@@ -14,12 +14,19 @@
  * for this one prompt without editing `.kodemux/config.json` — the router
  * still runs its full analysis, the cap only clamps the result downward.
  */
-import { loadConfig } from '../config.js';
+import { defaultRouterPolicy, loadConfig, withProvider } from '../config.js';
 import { route, type RouteCap, type RouteResult } from '../router.js';
 import { repoContext } from '../git.js';
 import { judgeComplexity, type JudgeOutcome } from '../ai-judge.js';
 import type { Signals } from '../classify.js';
-import { EFFORTS, TIERS, type Effort, type Tier } from '../constants/models.js';
+import {
+  EFFORTS,
+  PROVIDERS,
+  TIERS,
+  type Effort,
+  type Provider,
+  type Tier,
+} from '../constants/models.js';
 
 export interface RouteCommandOptions {
   files?: string;
@@ -35,6 +42,8 @@ export interface RouteCommandOptions {
   maxTier?: string;
   /** Cap the effort directive at or below this, for this invocation only. */
   maxEffort?: string;
+  /** Emit directives for this agent (`claude` | `codex`), this invocation only. */
+  provider?: string;
 }
 
 export interface RouteCommandOutput {
@@ -83,7 +92,20 @@ export async function runRoute(
     cap = { ...cap, maxEffort: opts.maxEffort as Effort };
   }
 
-  const config = loadConfig(cwd) ?? undefined;
+  if (opts.provider !== undefined && !PROVIDERS.includes(opts.provider as Provider)) {
+    return {
+      text: `kodemux route: --provider must be one of ${PROVIDERS.join(', ')}`,
+      exitCode: 1,
+    };
+  }
+
+  const loaded = loadConfig(cwd);
+  // `--provider` retargets the ladder for this invocation only — never written
+  // back to disk, and hand-pinned tier models are preserved (see withProvider).
+  const policy = opts.provider
+    ? withProvider(loaded?.router ?? defaultRouterPolicy(), opts.provider as Provider)
+    : loaded?.router;
+  const config = policy ? { router: policy } : undefined;
 
   const useGit = opts.git !== false;
   const ctx = useGit ? repoContext(cwd, opts.base) : null;
@@ -153,6 +175,7 @@ export async function runRoute(
 
   lines.push(
     '',
+    `provider    ${result.provider}`,
     `model       ${result.target.model}`,
     `effort      ${effort}`,
     `mode        ${result.target.mode}`,
@@ -162,11 +185,15 @@ export async function runRoute(
     ...result.directives.map((d) => `  ${d}`),
   );
 
+  if (result.invocation) {
+    lines.push('', 'or launch directly:', `  ${result.invocation}`);
+  }
+
   if (result.escalation) {
     lines.push(
       '',
       'escalate to:',
-      `  ${result.escalation.model} (${result.escalation.tier}) — ${result.escalation.trigger}`,
+      `  ${result.escalation.model}${result.escalation.effort ? ` @ ${result.escalation.effort}` : ''} (${result.escalation.tier}) — ${result.escalation.trigger}`,
     );
   }
 

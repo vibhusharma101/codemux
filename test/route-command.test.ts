@@ -155,7 +155,7 @@ test('an invalid --max-effort value errors instead of routing', async () => {
   const { dir, cleanup } = tempRepo();
   try {
     const out = await runRoute(dir, 'add a feature', {
-      maxEffort: 'ultra',
+      maxEffort: 'extreme',
       git: false,
       ai: false,
     });

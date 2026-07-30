@@ -10,8 +10,9 @@ import { runScan } from './commands/scan.js';
 import { runGuard } from './commands/guard.js';
 import { runPost } from './commands/post.js';
 import { installHooks } from './commands/hooks-install.js';
+import { installCodex } from './commands/codex-install.js';
 import { userPromptSubmitHook, preToolUseHook } from './hook-adapters.js';
-import { EFFORTS, TIERS } from './constants/models.js';
+import { EFFORTS, PROVIDERS, TIERS } from './constants/models.js';
 const require = createRequire(import.meta.url);
 const pkg = require('../package.json');
 const program = new Command();
@@ -42,6 +43,7 @@ program
     .option('--files <n>', 'override auto-detected file count')
     .option('--diff-lines <n>', 'override auto-detected diff size')
     .option('--base <ref>', 'diff against a base ref (e.g. main) instead of the working tree')
+    .option('--provider <name>', `emit directives for this agent (${PROVIDERS.join('|')})`)
     .option('--no-git', 'disable automatic git context detection')
     .option('--no-ai', 'disable AI-assisted escalation for low-confidence routes')
     .option('--max-tier <tier>', `cap the routed tier at or below this for this prompt only (${TIERS.join('|')})`)
@@ -89,6 +91,18 @@ hooksCmd
     .option('-g, --global', 'install into ~/.claude/settings.json instead of the project', false)
     .action((opts) => {
     const out = installHooks(process.cwd(), { global: opts.global });
+    (out.exitCode === 0 ? console.log : console.error)(out.text);
+    process.exitCode = out.exitCode;
+});
+const codexCmd = program
+    .command('codex')
+    .description('Manage the Codex CLI integration (AGENTS.md)');
+codexCmd
+    .command('install')
+    .description('Add kodemux routing + guardrail instructions to AGENTS.md (additive, idempotent)')
+    .option('-g, --global', 'install into ~/.codex/AGENTS.md instead of the project', false)
+    .action((opts) => {
+    const out = installCodex(process.cwd(), { global: opts.global });
     (out.exitCode === 0 ? console.log : console.error)(out.text);
     process.exitCode = out.exitCode;
 });

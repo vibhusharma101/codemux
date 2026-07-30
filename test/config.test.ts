@@ -16,7 +16,7 @@ test('defaultConfig builds the capability ladder and protects main', () => {
   assert.deepEqual(cfg.stack, ['node']);
   assert.equal(cfg.router.tiers.simple.model, 'claude-haiku-4-5');
   assert.equal(cfg.router.tiers.standard.model, 'claude-sonnet-5');
-  assert.equal(cfg.router.tiers.complex.model, 'claude-opus-4-8');
+  assert.equal(cfg.router.tiers.complex.model, 'claude-opus-5');
   assert.equal(cfg.router.tiers.frontier.model, 'claude-fable-5');
   assert.equal(cfg.router.tiers.simple.efforts[0], null); // Haiku has no effort
   assert.equal(cfg.router.riskFloor, 'complex');
@@ -91,7 +91,7 @@ test('loadConfig merges a partial config over defaults', () => {
     assert.equal(cfg.router.thresholds.complex, 3);
     // defaults preserved where not overridden
     assert.equal(cfg.router.thresholds.frontier, 9);
-    assert.equal(cfg.router.tiers.complex.model, 'claude-opus-4-8');
+    assert.equal(cfg.router.tiers.complex.model, 'claude-opus-5');
     assert.equal(cfg.hooks.pre.secretsScan, false);
     assert.ok(cfg.hooks.pre.branchProtection.includes('main'));
   } finally {

@@ -7,16 +7,19 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import {
-  TIER_SPECS,
+  DEFAULT_PROVIDER,
+  PROVIDERS,
+  TIER_SPECS_BY_PROVIDER,
   TIERS,
   type Effort,
   type ModelId,
+  type Provider,
   type Tier,
 } from './constants/models.js';
 
 export const CONFIG_DIR = '.kodemux';
 export const CONFIG_FILE = 'config.json';
-export const CONFIG_VERSION = 3;
+export const CONFIG_VERSION = 4;
 
 export interface TierPolicy {
   model: ModelId;
@@ -25,6 +28,12 @@ export interface TierPolicy {
 }
 
 export interface RouterPolicy {
+  /**
+   * Which coding agent the directives are written for. Only changes the models
+   * on the ladder and the directive syntax — thresholds, floors, escalation and
+   * caps are provider-agnostic.
+   */
+  provider: Provider;
   /** Model + effort for each rung of the ladder. */
   tiers: Record<Tier, TierPolicy>;
   /**
@@ -71,13 +80,15 @@ export interface KodemuxConfig {
   hooks: HookConfig;
 }
 
-/** Built-in router policy, derived from the tier specs. */
-export function defaultRouterPolicy(): RouterPolicy {
+/** Built-in router policy for a provider, derived from that provider's ladder. */
+export function defaultRouterPolicy(provider: Provider = DEFAULT_PROVIDER): RouterPolicy {
+  const specs = TIER_SPECS_BY_PROVIDER[provider];
   const tiers = {} as Record<Tier, TierPolicy>;
   for (const t of TIERS) {
-    tiers[t] = { model: TIER_SPECS[t].model, efforts: [...TIER_SPECS[t].efforts] };
+    tiers[t] = { model: specs[t].model, efforts: [...specs[t].efforts] };
   }
   return {
+    provider,
     tiers,
     thresholds: { standard: 2, complex: 5, frontier: 9 },
     riskFloor: 'complex',
@@ -97,11 +108,14 @@ export function defaultRouterPolicy(): RouterPolicy {
 }
 
 /** Build a default config for a freshly detected stack. */
-export function defaultConfig(stack: string[]): KodemuxConfig {
+export function defaultConfig(
+  stack: string[],
+  provider: Provider = DEFAULT_PROVIDER,
+): KodemuxConfig {
   return {
     version: CONFIG_VERSION,
     stack,
-    router: defaultRouterPolicy(),
+    router: defaultRouterPolicy(provider),
     hooks: {
       pre: {
         secretsScan: true,
@@ -110,6 +124,30 @@ export function defaultConfig(stack: string[]): KodemuxConfig {
       post: { format: true, lint: true, scopedTests: true },
     },
   };
+}
+
+/**
+ * Retarget a policy at a different provider, for a single invocation
+ * (`kodemux route --provider codex`) without touching the persisted config.
+ *
+ * Only rungs still sitting on the *current* provider's built-in model are
+ * swapped — a tier a developer deliberately pinned to some other model is left
+ * alone, so `--provider` never silently discards a hand-written override.
+ * Everything else (thresholds, floors, criticalPaths, aiAssist) is
+ * provider-agnostic and carries over untouched.
+ */
+export function withProvider(policy: RouterPolicy, provider: Provider): RouterPolicy {
+  if (policy.provider === provider) return policy;
+  const from = TIER_SPECS_BY_PROVIDER[policy.provider];
+  const to = TIER_SPECS_BY_PROVIDER[provider];
+  const tiers = {} as Record<Tier, TierPolicy>;
+  for (const t of TIERS) {
+    tiers[t] =
+      policy.tiers[t].model === from[t].model
+        ? { model: to[t].model, efforts: [...to[t].efforts] }
+        : policy.tiers[t];
+  }
+  return { ...policy, provider, tiers };
 }
 
 export function configPath(cwd: string): string {
@@ -134,8 +172,13 @@ export function loadConfig(cwd: string): KodemuxConfig | null {
   }
 
   const parsed = (raw ?? {}) as Partial<KodemuxConfig>;
-  const base = defaultConfig(parsed.stack ?? []);
   const pr = (parsed.router ?? {}) as Partial<RouterPolicy>;
+  // The provider selects which built-in ladder the tier defaults come from, so
+  // it has to be resolved before the base config is built.
+  const provider = PROVIDERS.includes(pr.provider as Provider)
+    ? (pr.provider as Provider)
+    : DEFAULT_PROVIDER;
+  const base = defaultConfig(parsed.stack ?? [], provider);
 
   // Deep-merge each tier so a partial override (e.g. just `model`) keeps the
   // base `efforts` instead of dropping it — a shallow spread here would leave
@@ -150,6 +193,7 @@ export function loadConfig(cwd: string): KodemuxConfig | null {
     version: parsed.version ?? base.version,
     stack: parsed.stack ?? base.stack,
     router: {
+      provider,
       tiers,
       thresholds: { ...base.router.thresholds, ...(pr.thresholds ?? {}) },
       riskFloor: pr.riskFloor ?? base.router.riskFloor,

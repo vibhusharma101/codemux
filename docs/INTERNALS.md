@@ -54,7 +54,7 @@ prompt
 output, no I/O, no network, testable with plain assertions. The *only* impurity in
 the whole pipeline is `repoContext()` (shells out to `git`) and `judgeComplexity()`
 (one optional network call) — both confined to the CLI layer, both skippable
-(`--no-git`, `--no-ai`), and both fail-safe. That purity is what makes the 79-test
+(`--no-git`, `--no-ai`), and both fail-safe. That purity is what makes the 125-test
 suite exhaustive and lets the interactive web explainer (`docs/index.html`) run the
 *exact same deterministic routing logic* client-side with zero backend — it can't
 run git or call an AI judge, so it demonstrates the free, instant core that handles
@@ -101,7 +101,7 @@ Everything routes onto one of four tiers, defined in `src/constants/models.ts`:
 |---|---|---|---|
 | `simple` | `claude-haiku-4-5` | *(none — Haiku has no effort parameter)* | docs, typos, mechanical edits |
 | `standard` | `claude-sonnet-5` | `medium` → `high` | everyday features & bug fixes |
-| `complex` | `claude-opus-4-8` | `high` → `xhigh` | hard, multi-file, autonomous work |
+| `complex` | `claude-opus-5` | `high` → `xhigh` | hard, multi-file, autonomous work |
 | `frontier` | `claude-fable-5` | `xhigh` → `max` | the most demanding reasoning & long-horizon agentic work |
 
 This is a **ladder**, not a lookup table — the router always starts at the
@@ -114,6 +114,44 @@ a risk flag is present, the complexity score is in the upper half of the tier's
 band, or (for `complex`+) the task is multi-step. Haiku's pair is `[null, null]`
 — the router knows to omit the `/effort` directive entirely rather than emit an
 invalid one (Haiku 4.5 has no effort control at all).
+
+### 3.1 Two ladders, one router
+
+The rungs are **provider-agnostic**. `router.provider` (or `--provider` for one
+invocation) selects which set of models sits behind them:
+
+| Tier | `claude` | `codex` | Codex effort |
+|---|---|---|---|
+| `simple` | `claude-haiku-4-5` | `gpt-5.6-luna` | `low` → `medium` |
+| `standard` | `claude-sonnet-5` | `gpt-5.6-terra` | `medium` → `high` |
+| `complex` | `claude-opus-5` | `gpt-5.6-sol` | `high` → `xhigh` |
+| `frontier` | `claude-fable-5` | `gpt-5.6-sol` | `max` → `ultra` |
+
+Everything upstream of the tier choice — the complexity estimate, intent and risk
+floors, critical-path detection, mode selection, parallelism, confidence,
+escalation, and the `--max-tier`/`--max-effort` caps — is untouched by the
+provider. That is the point: the *decision* is about how hard the task is, which
+has nothing to do with which vendor executes it. Only two things are
+provider-specific:
+
+1. **The models on the rungs** (`TIER_SPECS_BY_PROVIDER`). Note `gpt-5.6-sol`
+   occupies both top rungs — Codex's flagship separates "hard" from "hardest" by
+   reasoning effort rather than by a different model, so the ladder does too.
+2. **The directive syntax** (`directivesFor`). Claude Code takes `/model`,
+   `/effort` and `/mode` as three commands; Codex's `/model` picker sets model
+   and reasoning effort together, has `/approvals` instead of modes, and has no
+   subagent fan-out — so the plan and parallelism decisions are emitted there as
+   plain guidance, and a runnable `codex -m … -c model_reasoning_effort="…"`
+   command line is returned alongside (`invocation`, `null` for Claude Code).
+
+`PROVIDER_EFFORTS` records which levels each agent actually accepts, and
+`clampEffortToProvider()` runs last in `route()` so a hand-edited config can
+never emit a dead directive — `ultra` is Codex-only, and a Claude route is
+clamped to `max`.
+
+`withProvider()` (in `src/config.ts`) implements the `--provider` override. It
+swaps only the rungs still sitting on the *current* provider's built-in model, so
+a tier a developer deliberately pinned to some other model survives the switch.
 
 ---
 
@@ -412,17 +450,18 @@ injected-judge tests in `test/route-command.test.ts`.
 
 ---
 
-## 6. Config overrides — `.kodemux/config.json` (schema v3)
+## 6. Config overrides — `.kodemux/config.json` (schema v4)
 
 Everything in §3–§5 is a default in `defaultRouterPolicy()` (`src/config.ts`),
 and every field can be overridden per-repo:
 
 ```jsonc
 {
-  "version": 3,
+  "version": 4,
   "router": {
+    "provider": "claude",
     "tiers": {
-      "complex": { "model": "claude-opus-4-8", "efforts": ["high", "xhigh"] }
+      "complex": { "model": "claude-opus-5", "efforts": ["high", "xhigh"] }
     },
     "thresholds": { "standard": 2, "complex": 5, "frontier": 9 },
     "riskFloor": "complex",
@@ -434,7 +473,9 @@ and every field can be overridden per-repo:
 
 `loadConfig()` merges a partial file over the defaults field-by-field, so a
 config with just `{"router": {"thresholds": {"complex": 3}}}` is valid — every
-other field falls back silently.
+other field falls back silently. `provider` is resolved first, since it decides
+which built-in ladder the tier defaults are drawn from; it defaults to `claude`,
+so a pre-v4 config loads unchanged.
 
 ---
 
@@ -467,7 +508,8 @@ everywhere, instead of each command re-implementing it.
 | "How are critical paths matched?" | `src/glob.ts` + `router.criticalPaths` in `src/config.ts` |
 | "How does the AI-assist judge work?" | `src/ai-judge.ts` (`judgeComplexity`, `judgeWithClient`) + the `aiHint` param on `route()` in `src/router.ts` |
 | "What models/efforts exist?" | `src/constants/models.ts` |
+| "How does Codex support work?" | `TIER_SPECS_BY_PROVIDER`/`PROVIDER_EFFORTS` in `src/constants/models.ts`, `directivesFor` in `src/router.ts`, `withProvider` in `src/config.ts`, `src/commands/codex-install.ts` (§3.1) |
 | "What can I override in config?" | `src/config.ts` |
 | "How does the CLI format the answer?" | `src/commands/route.ts` |
 | "Does the web page match the CLI exactly?" | `docs/index.html` — the `<script>` is a line-for-line port of the deterministic routing logic (it can't run git or call an AI judge, so it demonstrates the free instant core — see §5.8) |
-| "What's tested?" | `test/*.test.ts` — 79 tests across classify, router, config, glob, git, scan, guard, hooks, init, ai-judge, and the route command's AI-assist orchestration |
+| "What's tested?" | `test/*.test.ts` — 125 tests across classify, router, config, glob, git, scan, guard, hooks, init, ai-judge, provider routing, the Codex AGENTS.md installer, and the route command's AI-assist orchestration |
