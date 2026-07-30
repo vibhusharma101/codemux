@@ -4,6 +4,53 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres
 to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.0] - 2026-07-30
+
+### Added
+
+- **Codex support: a second provider ladder (`--provider codex` / `router.provider`).**
+  The capability ladder is now provider-agnostic — the rungs, complexity
+  thresholds, intent/risk floors, critical-path detection, confidence,
+  escalation cascade and `--max-tier`/`--max-effort` caps are shared, and only
+  the models behind the rungs and the emitted directive syntax change:
+
+  | Tier | `claude` | `codex` |
+  | --- | --- | --- |
+  | `simple` | `claude-haiku-4-5` | `gpt-5.6-luna` |
+  | `standard` | `claude-sonnet-5` | `gpt-5.6-terra` |
+  | `complex` | `claude-opus-5` | `gpt-5.6-sol` (high → xhigh) |
+  | `frontier` | `claude-fable-5` | `gpt-5.6-sol` (max → ultra) |
+
+  Codex's `/model` picker takes model *and* reasoning effort in one command and
+  uses `/approvals` rather than modes, so codex routes emit
+  `/model gpt-5.6-sol xhigh` + `/approvals read-only` instead of separate
+  `/model`, `/effort` and `/mode` lines — plus a ready-to-run
+  `codex -m … -c model_reasoning_effort="…"` invocation, exposed as
+  `invocation` in `--json` (`null` for Claude Code, where these are session
+  directives rather than launch flags).
+- **`kodemux codex install [--global]`** — the Codex counterpart to
+  `hooks install`. Codex has no prompt-submit hook, so the integration point is
+  `AGENTS.md`: a marker-delimited block instructing the agent to run `route`
+  before non-trivial work and `guard`/`scan` before commits. Additive and
+  idempotent (existing content preserved, `.bak` written, re-runs rewrite the
+  block in place). Advisory by design — for hard enforcement under Codex, use
+  the same two commands in a git `pre-commit` hook.
+- **`ultra` effort level** on the shared scale, and `PROVIDER_EFFORTS` /
+  `clampEffortToProvider` so a route never emits an effort its target agent
+  can't accept (`ultra` is Codex-only; Claude routes are clamped to `max`).
+- Interactive explainer: a **target-agent toggle** that re-renders the ladder
+  and directives live for either provider.
+
+### Changed
+
+- **The `complex` rung is now `claude-opus-5`** (was `claude-opus-4-8`),
+  following the Opus 5 release.
+- `route --json` and the `UserPromptSubmit` hook context now carry `provider`;
+  the hook notes when a repo is routing on a non-Claude ladder, so the model
+  name it prints isn't mistaken for a Claude Code model.
+- Config schema v4 (adds `router.provider`). Older configs load unchanged and
+  default to `claude`.
+
 ## [0.6.0] - 2026-07-27
 
 ### Added

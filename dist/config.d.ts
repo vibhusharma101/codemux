@@ -1,13 +1,19 @@
-import { type Effort, type ModelId, type Tier } from './constants/models.js';
+import { type Effort, type ModelId, type Provider, type Tier } from './constants/models.js';
 export declare const CONFIG_DIR = ".kodemux";
 export declare const CONFIG_FILE = "config.json";
-export declare const CONFIG_VERSION = 3;
+export declare const CONFIG_VERSION = 4;
 export interface TierPolicy {
     model: ModelId;
     /** [base, boosted] effort; null = no effort directive (e.g. Haiku). */
     efforts: [Effort | null, Effort | null];
 }
 export interface RouterPolicy {
+    /**
+     * Which coding agent the directives are written for. Only changes the models
+     * on the ladder and the directive syntax — thresholds, floors, escalation and
+     * caps are provider-agnostic.
+     */
+    provider: Provider;
     /** Model + effort for each rung of the ladder. */
     tiers: Record<Tier, TierPolicy>;
     /**
@@ -55,10 +61,21 @@ export interface KodemuxConfig {
     router: RouterPolicy;
     hooks: HookConfig;
 }
-/** Built-in router policy, derived from the tier specs. */
-export declare function defaultRouterPolicy(): RouterPolicy;
+/** Built-in router policy for a provider, derived from that provider's ladder. */
+export declare function defaultRouterPolicy(provider?: Provider): RouterPolicy;
 /** Build a default config for a freshly detected stack. */
-export declare function defaultConfig(stack: string[]): KodemuxConfig;
+export declare function defaultConfig(stack: string[], provider?: Provider): KodemuxConfig;
+/**
+ * Retarget a policy at a different provider, for a single invocation
+ * (`kodemux route --provider codex`) without touching the persisted config.
+ *
+ * Only rungs still sitting on the *current* provider's built-in model are
+ * swapped — a tier a developer deliberately pinned to some other model is left
+ * alone, so `--provider` never silently discards a hand-written override.
+ * Everything else (thresholds, floors, criticalPaths, aiAssist) is
+ * provider-agnostic and carries over untouched.
+ */
+export declare function withProvider(policy: RouterPolicy, provider: Provider): RouterPolicy;
 export declare function configPath(cwd: string): string;
 /**
  * Load and normalize `.kodemux/config.json`. Missing fields fall back to

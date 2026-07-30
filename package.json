@@ -1,6 +1,6 @@
 {
   "name": "kodemux",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "description": "Repo-native middleware & guardrail engine for AI coding tools — routes prompts to the optimal model/effort/mode and enforces git-level guardrails.",
   "type": "module",
   "license": "MIT",
@@ -23,7 +23,9 @@
     "cli",
     "middleware",
     "guardrails",
-    "llm-routing"
+    "llm-routing",
+    "codex",
+    "openai"
   ],
   "engines": {
     "node": ">=20"

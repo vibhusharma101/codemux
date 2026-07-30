@@ -4,13 +4,16 @@
  */
 import { analyze, type Analysis, type RiskFlag, type Signals } from './classify.js';
 import {
+  DEFAULT_PROVIDER,
   EFFORTS,
   TIERS,
+  clampEffortToProvider,
   tierIndex,
   type Effort,
   type Intent,
   type Mode,
   type ModelId,
+  type Provider,
   type Tier,
 } from './constants/models.js';
 import { defaultRouterPolicy, type RouterPolicy } from './config.js';
@@ -26,6 +29,12 @@ export interface RouteTarget {
 export interface Escalation {
   model: ModelId;
   tier: Tier;
+  /**
+   * Boosted effort of the recommended tier. Carried explicitly because a ladder
+   * can repeat a model across two rungs (Codex's `sol` is both `complex` and
+   * `frontier`) — without the effort, such an escalation reads as a no-op.
+   */
+  effort: Effort | null;
   trigger: string;
 }
 
@@ -43,6 +52,8 @@ export interface AiHint {
 export interface RouteResult {
   intent: Intent;
   complexity: number;
+  /** Which agent the directives are written for (`claude` | `codex`). */
+  provider: Provider;
   tier: Tier;
   risks: RiskFlag[];
   target: RouteTarget;
@@ -60,8 +71,14 @@ export interface RouteResult {
   /** True when a developer-supplied cap (RouteCap) actually lowered the tier
    *  and/or effort below what complexity/risk alone would have picked. */
   capped: boolean;
-  /** Agent-facing directives, e.g. `/model claude-opus-4-8`, `/effort xhigh`. */
+  /** Agent-facing directives, e.g. `/model claude-opus-5`, `/effort xhigh`. */
   directives: string[];
+  /**
+   * Ready-to-run shell invocation, when the provider's CLI can express the
+   * whole decision as flags (Codex). `null` for providers where model/effort
+   * are session directives rather than launch flags (Claude Code).
+   */
+  invocation: string | null;
   reasons: string[];
 }
 
@@ -111,10 +128,20 @@ function modeDirective(mode: Mode): string {
 }
 
 /**
- * Build the ordered directive list. Omits `/effort` when the model has none,
- * and appends `/agents N` only when multi-agent mode recommends parallelism.
+ * Build the ordered directive list for the target provider.
+ *
+ * Claude Code takes model, effort and mode as separate slash commands. The
+ * Codex CLI's `/model` picker sets model *and* reasoning effort in one command,
+ * has `/approvals` rather than modes, and has no subagent fan-out — so the
+ * parallel and plan decisions are emitted as plain guidance there.
  */
-export function directivesFor(target: RouteTarget, parallelAgents = 1): string[] {
+export function directivesFor(
+  target: RouteTarget,
+  parallelAgents = 1,
+  provider: Provider = DEFAULT_PROVIDER,
+): string[] {
+  if (provider === 'codex') return codexDirectives(target, parallelAgents);
+
   const dirs = [`/model ${target.model}`];
   if (target.effort) dirs.push(`/effort ${target.effort}`);
   dirs.push(modeDirective(target.mode));
@@ -122,6 +149,40 @@ export function directivesFor(target: RouteTarget, parallelAgents = 1): string[]
     dirs.push(`/agents ${parallelAgents}`);
   }
   return dirs;
+}
+
+function codexDirectives(target: RouteTarget, parallelAgents: number): string[] {
+  const dirs = [`/model ${target.model}${target.effort ? ` ${target.effort}` : ''}`];
+  switch (target.mode) {
+    case 'read-only':
+      dirs.push('/approvals read-only');
+      break;
+    case 'plan':
+      dirs.push('plan first — outline the change and confirm before editing');
+      break;
+    case 'multi-agent':
+      if (parallelAgents > 1) {
+        dirs.push(
+          `split across ${parallelAgents} parallel codex sessions (one per independent workstream)`,
+        );
+      }
+      break;
+    case 'single':
+      break;
+  }
+  return dirs;
+}
+
+/**
+ * The exact `codex` command line for this decision. Codex reads reasoning
+ * effort from config (`-c model_reasoning_effort=...`), and read-only work maps
+ * onto its sandbox flag.
+ */
+function codexInvocation(target: RouteTarget): string {
+  const parts = ['codex', '-m', target.model];
+  if (target.effort) parts.push('-c', `model_reasoning_effort="${target.effort}"`);
+  if (target.mode === 'read-only') parts.push('--sandbox', 'read-only');
+  return parts.join(' ');
 }
 
 /**
@@ -219,6 +280,7 @@ export function route(
   cap?: RouteCap,
 ): RouteResult {
   const p = config?.router ?? defaultRouterPolicy();
+  const provider = p.provider ?? DEFAULT_PROVIDER;
   const a = analyze(prompt, signals);
 
   // Merge prompt-derived risks with critical-path risk from the actual diff,
@@ -269,6 +331,10 @@ export function route(
     effortCapped = true;
   }
 
+  // Never emit an effort the target agent doesn't accept (e.g. `ultra` is
+  // Codex-only) — a hand-edited config could otherwise produce a dead directive.
+  effort = clampEffortToProvider(effort, provider);
+
   const mode = chooseMode(a, tier);
   const target: RouteTarget = { model: spec.model, effort, mode };
   const parallelAgents = recommendParallelism(a, mode, signals.fileCount);
@@ -288,9 +354,11 @@ export function route(
     if (cap?.maxTier && tierIndex(next) > tierIndex(cap.maxTier)) {
       escalationBlockedByCap = true;
     } else {
+      const nextEfforts = p.tiers[next].efforts ?? [null, null];
       escalation = {
         model: p.tiers[next].model,
         tier: next,
+        effort: clampEffortToProvider(nextEfforts[1] ?? nextEfforts[0] ?? null, provider),
         trigger:
           'if the agent stalls, reports low confidence, or the change proves larger than estimated',
       };
@@ -330,6 +398,7 @@ export function route(
   return {
     intent: a.intent,
     complexity,
+    provider,
     tier,
     risks,
     target,
@@ -338,7 +407,8 @@ export function route(
     escalation,
     aiAssisted,
     capped: tierCapped || effortCapped,
-    directives: directivesFor(target, parallelAgents),
+    directives: directivesFor(target, parallelAgents, provider),
+    invocation: provider === 'codex' ? codexInvocation(target) : null,
     reasons,
   };
 }

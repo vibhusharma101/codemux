@@ -14,11 +14,11 @@
  * for this one prompt without editing `.kodemux/config.json` — the router
  * still runs its full analysis, the cap only clamps the result downward.
  */
-import { loadConfig } from '../config.js';
+import { defaultRouterPolicy, loadConfig, withProvider } from '../config.js';
 import { route } from '../router.js';
 import { repoContext } from '../git.js';
 import { judgeComplexity } from '../ai-judge.js';
-import { EFFORTS, TIERS } from '../constants/models.js';
+import { EFFORTS, PROVIDERS, TIERS, } from '../constants/models.js';
 /**
  * Core: takes cwd + prompt + options, returns text to print and an exit code.
  * Side effects are reading git state (skippable via `--no-git`) and, only when
@@ -48,7 +48,19 @@ export async function runRoute(cwd, prompt, opts = {}, deps = {}) {
         }
         cap = { ...cap, maxEffort: opts.maxEffort };
     }
-    const config = loadConfig(cwd) ?? undefined;
+    if (opts.provider !== undefined && !PROVIDERS.includes(opts.provider)) {
+        return {
+            text: `kodemux route: --provider must be one of ${PROVIDERS.join(', ')}`,
+            exitCode: 1,
+        };
+    }
+    const loaded = loadConfig(cwd);
+    // `--provider` retargets the ladder for this invocation only — never written
+    // back to disk, and hand-pinned tier models are preserved (see withProvider).
+    const policy = opts.provider
+        ? withProvider(loaded?.router ?? defaultRouterPolicy(), opts.provider)
+        : loaded?.router;
+    const config = policy ? { router: policy } : undefined;
     const useGit = opts.git !== false;
     const ctx = useGit ? repoContext(cwd, opts.base) : null;
     const signals = {};
@@ -102,9 +114,12 @@ export async function runRoute(cwd, prompt, opts = {}, deps = {}) {
     if (judgeOutcome && !judgeOutcome.ok) {
         lines.push(`ai-assist   skipped (${judgeOutcome.reason})`);
     }
-    lines.push('', `model       ${result.target.model}`, `effort      ${effort}`, `mode        ${result.target.mode}`, `agents      ${result.parallelAgents}${result.target.mode === 'multi-agent' ? '  (parallelize — independent workstreams)' : '  (single agent — do not parallelize)'}`, '', 'directives:', ...result.directives.map((d) => `  ${d}`));
+    lines.push('', `provider    ${result.provider}`, `model       ${result.target.model}`, `effort      ${effort}`, `mode        ${result.target.mode}`, `agents      ${result.parallelAgents}${result.target.mode === 'multi-agent' ? '  (parallelize — independent workstreams)' : '  (single agent — do not parallelize)'}`, '', 'directives:', ...result.directives.map((d) => `  ${d}`));
+    if (result.invocation) {
+        lines.push('', 'or launch directly:', `  ${result.invocation}`);
+    }
     if (result.escalation) {
-        lines.push('', 'escalate to:', `  ${result.escalation.model} (${result.escalation.tier}) — ${result.escalation.trigger}`);
+        lines.push('', 'escalate to:', `  ${result.escalation.model}${result.escalation.effort ? ` @ ${result.escalation.effort}` : ''} (${result.escalation.tier}) — ${result.escalation.trigger}`);
     }
     lines.push('', 'why:', ...result.reasons.map((r) => `  - ${r}`));
     return { text: lines.join('\n'), exitCode: 0 };

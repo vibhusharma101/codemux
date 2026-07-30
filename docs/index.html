@@ -135,6 +135,7 @@
   .examples { display: flex; flex-wrap: wrap; gap: 6px; margin: 12px 0 20px; }
   .chip { font-family: var(--mono); font-size: 12px; cursor: pointer; background: var(--surface); color: var(--ink-2); border: 1px solid var(--line); border-radius: 999px; padding: 5px 11px; }
   .chip:hover { border-color: var(--signal); color: var(--ink); }
+  .chip[aria-pressed="true"] { background: var(--signal); border-color: var(--signal); color: var(--paper); }
   .slider-row { margin-bottom: 16px; }
   .slider-row .top { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 6px; }
   .slider-row .lbl { font-family: var(--mono); font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-3); }
@@ -290,6 +291,9 @@
       <div class="panel router">
         <div class="router-grid">
           <div class="router-in">
+            <label class="field">Target agent</label>
+            <div class="examples" id="providers" style="margin-top:0"></div>
+
             <label class="field" for="prompt">Task prompt</label>
             <textarea id="prompt" spellcheck="false">design a distributed rate limiter with concurrency control</textarea>
             <div class="examples" id="examples"></div>
@@ -309,6 +313,7 @@
             <p class="note">In the CLI these numbers are read automatically from <code>git diff</code>, and the critical-path flag fires on the real changed files — here you drive them by hand. All signals are additive.</p>
             <p class="note">This page demonstrates the free, instant deterministic core only. The CLI also has an optional AI-assist step (<code>--no-ai</code> to disable) that consults a cheap Haiku judge — reusing your existing Anthropic credentials, no setup — whenever this confidence score drops low; a static page can't safely make that call, so it isn't shown here. See <a href="https://github.com/vibhusharma101/kodemux/blob/main/docs/INTERNALS.md#58-ai-assisted-escalation--a-cheap-optional-second-opinion">docs/INTERNALS.md §5.8</a>.</p>
             <p class="note">New in v0.6.0: <code>--max-tier</code> / <code>--max-effort</code> let you cap the routed tier/effort for one prompt without touching config — the router still runs this full analysis, the cap just clamps the result downward. CLI-only (no UI here to keep this page a pure "what would it pick" demo). See <a href="https://github.com/vibhusharma101/kodemux/blob/main/docs/INTERNALS.md">docs/INTERNALS.md §5.7a</a>.</p>
+            <p class="note">New in v0.7.0: the <b>target agent</b> toggle above. The rungs, thresholds, floors and escalation are identical for both — only the models behind them and the directive syntax change, so the same decision maps onto <code>claude-*</code> or the GPT-5.6 family (<code>kodemux route "…" --provider codex</code>).</p>
           </div>
 
           <div class="router-out">
@@ -403,12 +408,16 @@ API_KEY=replace_me</textarea>
     <section id="hooks">
       <div class="section-head">
         <span class="num">04</span>
-        <h2>Wire it into Claude Code</h2>
-        <p>One command turns the router and guardrails into native Claude Code hooks — a routing recommendation appears before every prompt, risky commits are blocked outright.</p>
+        <h2>Wire it into Claude Code &amp; Codex</h2>
+        <p>One command per agent. In Claude Code it becomes native hooks — a routing recommendation appears before every prompt, risky commits are blocked outright. Codex has no prompt hook, so there it becomes an <code>AGENTS.md</code> block the agent reads at the start of every session.</p>
       </div>
       <pre class="code"><span class="c"># in any repo, once</span>
-kodemux hooks install            <span class="c"># -&gt; ./.claude/settings.json</span>
-kodemux hooks install --global   <span class="c"># -&gt; ~/.claude/settings.json, every project</span></pre>
+kodemux hooks install            <span class="c"># -&gt; ./.claude/settings.json (Claude Code)</span>
+kodemux hooks install --global   <span class="c"># -&gt; ~/.claude/settings.json, every project</span>
+
+kodemux codex install            <span class="c"># -&gt; ./AGENTS.md (Codex)</span>
+kodemux codex install --global   <span class="c"># -&gt; ~/.codex/AGENTS.md, every project</span></pre>
+      <p class="note" style="margin-top:12px">The difference is enforcement, not advice: Claude Code hooks can <b>block</b> a <code>git commit</code> (exit 2), while the Codex block is an instruction the agent follows. Routing is advisory in both.</p>
       <div class="cols" style="margin-top:18px">
         <div class="panel panel-pad">
           <p class="gr-title"><code>UserPromptSubmit</code> <span class="tag">advisory</span></p>
@@ -444,7 +453,7 @@ refusing direct edits on protected branch
       <div class="steps" style="margin-bottom:18px">
         <div class="step"><span class="n">STEP 1</span><h3>Install</h3><p>Clone &amp; <code>npm link</code> — no build step, <code>dist/</code> is committed.</p></div>
         <div class="step"><span class="n">STEP 2</span><h3>Init</h3><p><code>kodemux init</code> detects your stack and scaffolds <code>.kodemux/</code>.</p></div>
-        <div class="step"><span class="n">STEP 3</span><h3>Route, guard &amp; hook</h3><p>Wire <code>route</code>/<code>guard</code>/<code>scan</code>/<code>post</code> into your agent, or run <code>hooks install</code> for native Claude Code hooks.</p></div>
+        <div class="step"><span class="n">STEP 3</span><h3>Route, guard &amp; hook</h3><p>Wire <code>route</code>/<code>guard</code>/<code>scan</code>/<code>post</code> into your agent, or run <code>hooks install</code> (Claude Code) / <code>codex install</code> (Codex).</p></div>
       </div>
       <pre class="code"><span class="c"># clone & link — works everywhere, incl. Windows & the Claude Code terminal</span>
 git clone https://github.com/vibhusharma101/kodemux.git
@@ -452,11 +461,13 @@ cd kodemux &amp;&amp; npm install &amp;&amp; npm link
 
 <span class="c"># in any repo</span>
 kodemux init
-kodemux route <span class="p">"design a distributed rate limiter"</span>   <span class="c"># → opus-4-8 / xhigh / /plan</span>
+kodemux route <span class="p">"design a distributed rate limiter"</span>   <span class="c"># → opus-5 / xhigh / /plan</span>
 kodemux route <span class="p">"fix a typo in the README"</span>          <span class="c"># → haiku-4-5 / single</span>
+kodemux route <span class="p">"fix a typo"</span> --provider codex        <span class="c"># → gpt-5.6-luna / low</span>
 kodemux guard         <span class="c"># refuse edits on main</span>
 kodemux scan          <span class="c"># secrets check</span>
-kodemux hooks install <span class="c"># native Claude Code UserPromptSubmit + PreToolUse hooks</span></pre>
+kodemux hooks install <span class="c"># native Claude Code UserPromptSubmit + PreToolUse hooks</span>
+kodemux codex install <span class="c"># AGENTS.md block for the Codex CLI</span></pre>
     </section>
 
     <section style="padding-top:20px">
@@ -491,7 +502,8 @@ kodemux hooks install <span class="c"># native Claude Code UserPromptSubmit + Pr
    so this page demonstrates the real behavior, not a mock.
    ============================================================ */
 
-const MODELS = { HAIKU:"claude-haiku-4-5", SONNET:"claude-sonnet-5", OPUS:"claude-opus-4-8", FABLE:"claude-fable-5" };
+const MODELS = { HAIKU:"claude-haiku-4-5", SONNET:"claude-sonnet-5", OPUS:"claude-opus-5", FABLE:"claude-fable-5" };
+const CODEX = { LUNA:"gpt-5.6-luna", TERRA:"gpt-5.6-terra", SOL:"gpt-5.6-sol" };
 const TIERS = ["simple","standard","complex","frontier"];
 const TIER_SPECS = {
   simple:   { model:MODELS.HAIKU,  efforts:[null,null],        blurb:"mechanical, low-risk edits" },
@@ -499,6 +511,17 @@ const TIER_SPECS = {
   complex:  { model:MODELS.OPUS,   efforts:["high","xhigh"],   blurb:"hard, multi-file, autonomous work" },
   frontier: { model:MODELS.FABLE,  efforts:["xhigh","max"],    blurb:"most demanding reasoning & long-horizon work" },
 };
+/* The Codex ladder: same rungs, GPT-5.6 models behind them. `sol` sits on both
+   top rungs, separated by reasoning effort. */
+const CODEX_TIER_SPECS = {
+  simple:   { model:CODEX.LUNA,  efforts:["low","medium"],   blurb:"mechanical, low-risk edits" },
+  standard: { model:CODEX.TERRA, efforts:["medium","high"],  blurb:"everyday features & fixes" },
+  complex:  { model:CODEX.SOL,   efforts:["high","xhigh"],   blurb:"hard, multi-file, autonomous work" },
+  frontier: { model:CODEX.SOL,   efforts:["max","ultra"],    blurb:"most demanding reasoning & long-horizon work" },
+};
+const SPECS_BY_PROVIDER = { claude:TIER_SPECS, codex:CODEX_TIER_SPECS };
+let PROVIDER = "claude";
+
 const POLICY = { thresholds:{ standard:2, complex:5, frontier:9 }, riskFloor:"complex", escalateBelowConfidence:0.6,
   criticalPaths:["**/auth/**","**/migrations/**","infra/**",".env*","**/secrets/**","**/payment*/**","**/billing/**","**/*.tf"] };
 
@@ -624,7 +647,19 @@ function chooseMode(a, tier){
   return "single";
 }
 function modeDirective(m){ return m==="plan"?"/plan":m==="single"?"/mode single":m==="multi-agent"?"/mode multi-agent":"/mode read-only"; }
-function directivesFor(t, agents){ const d=[`/model ${t.model}`]; if (t.effort) d.push(`/effort ${t.effort}`); d.push(modeDirective(t.mode)); if (t.mode==="multi-agent" && agents>1) d.push(`/agents ${agents}`); return d; }
+function directivesFor(t, agents){
+  // Codex's /model picker takes model + reasoning effort in one command, has
+  // /approvals instead of modes, and has no subagent fan-out — so the plan and
+  // parallelism decisions are emitted as plain guidance there.
+  if (PROVIDER === "codex"){
+    const d=[`/model ${t.model}${t.effort?` ${t.effort}`:""}`];
+    if (t.mode==="read-only") d.push("/approvals read-only");
+    else if (t.mode==="plan") d.push("plan first — outline the change and confirm before editing");
+    else if (t.mode==="multi-agent" && agents>1) d.push(`split across ${agents} parallel codex sessions (one per independent workstream)`);
+    return d;
+  }
+  const d=[`/model ${t.model}`]; if (t.effort) d.push(`/effort ${t.effort}`); d.push(modeDirective(t.mode)); if (t.mode==="multi-agent" && agents>1) d.push(`/agents ${agents}`); return d;
+}
 function recommendParallelism(a, mode, fileCount){
   if (mode !== "multi-agent") return 1;
   let n = 2;
@@ -644,7 +679,8 @@ function route(prompt, signals){
   let tier = tierFromComplexity(a.complexity, p);
   if (INTENT_FLOOR[a.intent]) tier = maxTier(tier, INTENT_FLOOR[a.intent]);
   if (risks.length) tier = maxTier(tier, p.riskFloor);
-  const spec = TIER_SPECS[tier];
+  const specs = SPECS_BY_PROVIDER[PROVIDER];
+  const spec = specs[tier];
   const upperBand = a.complexity >= (p.thresholds.frontier + p.thresholds.complex)/2;
   const boost = risks.length>0 || upperBand || (a.multiStep && tierIndex(tier) >= tierIndex("complex"));
   const effort = spec.efforts[boost?1:0] ?? spec.efforts[0];
@@ -656,13 +692,13 @@ function route(prompt, signals){
   const idx = tierIndex(tier);
   if (idx < TIERS.length-1 && confidence < p.escalateBelowConfidence){
     const next = TIERS[idx+1];
-    escalation = { model:TIER_SPECS[next].model, tier:next, trigger:"if the agent stalls, reports low confidence, or the change proves larger than estimated" };
+    escalation = { model:specs[next].model, tier:next, effort:(specs[next].efforts[1] ?? specs[next].efforts[0] ?? null), trigger:"if the agent stalls, reports low confidence, or the change proves larger than estimated" };
   }
   const reasons = a.reasons.slice();
   if (criticalHits.length) reasons.push(`critical path touched (${criticalHits.slice(0,3).join(", ")}) → +risk`);
   reasons.unshift(`complexity ${a.complexity} + ${risks.length?`risk[${risks.join(",")}] `:""}intent ${a.intent} → ${tier} tier`);
   if (mode === "multi-agent") reasons.push(`parallelizable work → fan out to ${parallelAgents} agents`);
-  return { intent:a.intent, complexity:a.complexity, tier, risks, target, parallelAgents, confidence, escalation, directives:directivesFor(target, parallelAgents), reasons };
+  return { intent:a.intent, complexity:a.complexity, tier, risks, target, parallelAgents, confidence, escalation, provider:PROVIDER, directives:directivesFor(target, parallelAgents), reasons };
 }
 
 /* ---- Router UI ---- */
@@ -682,8 +718,30 @@ EXAMPLES.forEach((ex)=>{ const b=document.createElement("button"); b.className="
 // complexity ticks at thresholds
 (function(){ const ticks=$("ticks"); [["2","standard"],["5","complex"],["9","frontier"]].forEach(([v,lbl])=>{ const t=document.createElement("span"); t.className="tick"; t.style.left=(Number(v)/COMPLEXITY_MAX*100)+"%"; t.textContent=v; t.title=lbl; ticks.appendChild(t); }); })();
 
-// ladder rungs (static skeleton; highlight active on render)
-(function(){ const L=$("ladder"); TIERS.forEach((t)=>{ const r=document.createElement("div"); r.className="rung"; r.dataset.tier=t; r.style.setProperty("--rc", TIER_HEAT[t]); r.innerHTML=`<span class="tname">${t}</span><span><span class="tmodel">${TIER_SPECS[t].model}</span><br><span class="tblurb">${TIER_SPECS[t].blurb}</span></span><span class="tdot"></span>`; L.appendChild(r); }); })();
+// provider toggle — same rungs, different models behind them
+const PROVIDER_LABELS = { claude:"Claude Code", codex:"Codex" };
+(function(){
+  const P=$("providers");
+  Object.keys(PROVIDER_LABELS).forEach((id)=>{
+    const b=document.createElement("button"); b.className="chip"; b.type="button";
+    b.textContent=PROVIDER_LABELS[id]; b.dataset.provider=id;
+    b.setAttribute("aria-pressed", String(id===PROVIDER));
+    b.addEventListener("click",()=>{
+      PROVIDER=id;
+      P.querySelectorAll(".chip").forEach((c)=>c.setAttribute("aria-pressed", String(c.dataset.provider===id)));
+      drawLadder(); render();
+    });
+    P.appendChild(b);
+  });
+})();
+
+// ladder rungs (redrawn when the provider changes; active tier highlighted on render)
+function drawLadder(){
+  const L=$("ladder"); L.innerHTML="";
+  const specs = SPECS_BY_PROVIDER[PROVIDER];
+  TIERS.forEach((t)=>{ const r=document.createElement("div"); r.className="rung"; r.dataset.tier=t; r.style.setProperty("--rc", TIER_HEAT[t]); r.innerHTML=`<span class="tname">${t}</span><span><span class="tmodel">${specs[t].model}</span><br><span class="tblurb">${specs[t].blurb}</span></span><span class="tdot"></span>`; L.appendChild(r); });
+}
+drawLadder();
 
 function render(){
   const files = +filesEl.value, diff = +diffEl.value;
@@ -707,11 +765,12 @@ function render(){
   const dv = $("directives"); dv.innerHTML="";
   const heat = r.target.effort ? EFFORT_HEAT[r.target.effort] : TIER_HEAT[r.tier];
   const rows = [["model", r.target.model], ["effort", r.target.effort || "n/a (Haiku has no effort control)"], ["mode", r.target.mode]];
+  rows.unshift(["provider", `${PROVIDER_LABELS[r.provider]}  →  kodemux route "…" --provider ${r.provider}`]);
   // Surface parallelism as its own row, always — a task that should stay
   // single-threaded says so explicitly, instead of leaving it to be inferred
   // from an absent row.
   rows.push(["agents", r.target.mode === "multi-agent"
-    ? `${r.parallelAgents} in parallel — genuinely parallelizable  →  /agents ${r.parallelAgents}`
+    ? `${r.parallelAgents} in parallel — genuinely parallelizable  →  ${r.provider === "codex" ? `${r.parallelAgents} codex sessions` : `/agents ${r.parallelAgents}`}`
     : `1 — don't parallelize this`]);
   rows.forEach(([k,v],i)=>{ const el=document.createElement("div"); el.className="dir"; el.style.borderLeftColor=heat; el.style.animationDelay=(i*0.05)+"s"; el.innerHTML=`<span class="dk">${k}</span><span class="dv">${v}</span>`; dv.appendChild(el); });
 
@@ -722,7 +781,7 @@ function render(){
 
   // escalation
   const esc = $("escal");
-  if (r.escalation){ esc.hidden=false; esc.innerHTML = `↑ escalate to <b>${r.escalation.model}</b> (${r.escalation.tier}) — ${r.escalation.trigger}.`; }
+  if (r.escalation){ esc.hidden=false; esc.innerHTML = `↑ escalate to <b>${r.escalation.model}</b>${r.escalation.effort?` @ ${r.escalation.effort}`:""} (${r.escalation.tier}) — ${r.escalation.trigger}.`; }
   else esc.hidden=true;
 
   // why

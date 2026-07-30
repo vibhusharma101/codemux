@@ -13,6 +13,8 @@ export interface RouteCommandOptions {
     maxTier?: string;
     /** Cap the effort directive at or below this, for this invocation only. */
     maxEffort?: string;
+    /** Emit directives for this agent (`claude` | `codex`), this invocation only. */
+    provider?: string;
 }
 export interface RouteCommandOutput {
     text: string;

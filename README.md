@@ -2,10 +2,10 @@
 
 > Repo-native middleware & guardrail engine for AI coding tools.
 
-`kodemux` sits between your prompts and your AI coding agent (Claude Code, Cursor,
-custom agents). It auto-detects repo context, **routes** each task to the optimal
-model / effort / mode, and enforces **git-level guardrails** before and after code
-generation.
+`kodemux` sits between your prompts and your AI coding agent (Claude Code, the
+Codex CLI, Cursor, custom agents). It auto-detects repo context, **routes** each
+task to the optimal model / effort / mode, and enforces **git-level guardrails**
+before and after code generation.
 
 ```
 [ prompt ] → kodemux (classify + pre-hooks) → [ AI agent ] → kodemux (post-hooks + guardrails) → [ commit ]
@@ -81,7 +81,7 @@ setup — see [Credentials](#credentials-only-needed-for-ai-assist) below.
 
 ## Why
 
-AI tools expose a large matrix of models (Fable 5, Opus 4.8, Sonnet 5, Haiku 4.5),
+AI tools expose a large matrix of models (Fable 5, Opus 5, Sonnet 5, Haiku 4.5),
 effort levels (`low` → `xhigh`), and modes (single vs. multi-agent). Teams overspend
 on overkill models for trivial edits, underpower complex work, and lack a consistent
 guardrail layer. `kodemux` makes the routing decision **explicit, repeatable, and
@@ -170,11 +170,12 @@ kodemux post                              # plan scoped format/lint/test
 | Command | Purpose |
 | --- | --- |
 | `kodemux init [--force]` | Detect the repo stack and scaffold `.kodemux/` (config + synthesized `CLAUDE.md`). |
-| `kodemux route <prompt> [--files n] [--diff-lines n] [--base ref] [--no-git] [--no-ai] [--max-tier tier] [--max-effort level] [--json]` | Read git context, estimate complexity, pick a tier on the capability ladder, and emit `/model` · `/effort` · `/mode` (· `/agents N`) directives with a confidence + escalation. Consults a cheap AI judge for low-confidence routes unless `--no-ai`. `--max-tier`/`--max-effort` cap the result for this one prompt without touching config. |
+| `kodemux route <prompt> [--provider claude\|codex] [--files n] [--diff-lines n] [--base ref] [--no-git] [--no-ai] [--max-tier tier] [--max-effort level] [--json]` | Read git context, estimate complexity, pick a tier on the capability ladder, and emit `/model` · `/effort` · `/mode` (· `/agents N`) directives with a confidence + escalation. `--provider codex` emits the same decision against the GPT-5.6 ladder in Codex syntax. Consults a cheap AI judge for low-confidence routes unless `--no-ai`. `--max-tier`/`--max-effort` cap the result for this one prompt without touching config. |
 | `kodemux guard` | **Pre-hook.** Refuse direct edits on a protected branch. Exit 1 to block. |
 | `kodemux scan [--json]` | **Pre-hook.** Scan changed files for secret-shaped strings. Exit 1 on a hit. |
 | `kodemux post [--run] [--json]` | **Post-hook.** Plan (dry-run) or run scoped format/lint/test for changed files. |
 | `kodemux hooks install [--global]` | Register kodemux's `UserPromptSubmit`/`PreToolUse` hooks in Claude Code's `.claude/settings.json`. Additive and idempotent — merges into existing hooks, backs up the file, safe to re-run. `--global` installs to `~/.claude/settings.json` instead of the project. |
+| `kodemux codex install [--global]` | Add a marker-delimited kodemux block to `AGENTS.md` so the Codex CLI runs `route` before non-trivial work and `guard`/`scan` before commits. Additive and idempotent — existing content is preserved and backed up, re-running rewrites the block in place. `--global` installs to `~/.codex/AGENTS.md`. |
 
 ### Routing
 
@@ -197,8 +198,26 @@ deterministic rule engine (no LLM call): free, instant, testable, reproducible.
    | --- | --- | --- | --- | --- |
    | `simple` | `claude-haiku-4-5` | complexity 0–1 | — (no effort control) | docs, tests, mechanical edits |
    | `standard` | `claude-sonnet-5` | ≥ 2 | medium → high | everyday features & fixes |
-   | `complex` | `claude-opus-4-8` | ≥ 5 | high → xhigh | hard, multi-file, autonomous work |
+   | `complex` | `claude-opus-5` | ≥ 5 | high → xhigh | hard, multi-file, autonomous work |
    | `frontier` | `claude-fable-5` | ≥ 9 | xhigh → max | most demanding reasoning & long-horizon work |
+
+   The rungs are provider-agnostic — `--provider codex` (or `router.provider` in
+   config) swaps the models behind them for the GPT-5.6 family, leaving every
+   threshold, floor, cap and escalation rule identical:
+
+   | Tier | Claude ladder | Codex ladder | Effort |
+   | --- | --- | --- | --- |
+   | `simple` | `claude-haiku-4-5` | `gpt-5.6-luna` | — / low → medium |
+   | `standard` | `claude-sonnet-5` | `gpt-5.6-terra` | medium → high |
+   | `complex` | `claude-opus-5` | `gpt-5.6-sol` | high → xhigh |
+   | `frontier` | `claude-fable-5` | `gpt-5.6-sol` | xhigh → max / max → ultra |
+
+   Only the *directive syntax* differs: Claude Code takes `/model` + `/effort` +
+   `/mode` as separate commands, while Codex's `/model` picker sets model and
+   reasoning effort together and uses `/approvals` instead of modes. Codex routes
+   also print a ready-to-run command line
+   (`codex -m gpt-5.6-sol -c model_reasoning_effort="xhigh"`). `ultra` is a Codex-only
+   effort level; a Claude route is never emitted above `max`.
 
    *Floors:* any **security / production / critical-path** risk → `complex` (Opus)
    minimum · `architecture` intent → `complex` · features/fixes/refactors never
@@ -266,12 +285,13 @@ values fall back to defaults, so you can hand-edit a partial config.
 
 ```jsonc
 {
-  "version": 3,
+  "version": 4,
   "stack": ["node", "typescript"],
   "router": {
+    "provider": "claude",             // or "codex" — selects which ladder the tiers default to
     "tiers": {
       // swap the model or efforts for any rung of the ladder
-      "complex": { "model": "claude-opus-4-8", "efforts": ["high", "xhigh"] }
+      "complex": { "model": "claude-opus-5", "efforts": ["high", "xhigh"] }
     },
     "thresholds": { "standard": 2, "complex": 5, "frontier": 9 },
     "riskFloor": "complex",           // min tier when any risk flag is present
@@ -344,7 +364,7 @@ never has to be read as "parallelize" by omission:
 
 ```
 kodemux routing recommendation (deterministic — verify against your own read of the repo before deferring to it):
-  tier complex · model claude-opus-4-8 · effort xhigh · mode single
+  tier complex · model claude-opus-5 · effort xhigh · mode single
   risk flags: security
   agents: 1 — do not parallelize this; a single agent working sequentially is enough, extra agents would just add coordination overhead.
   confidence 0.57 — deterministic signal is thin here; use your own read of the repo to confirm or override this tier.
@@ -369,6 +389,35 @@ kodemux routing recommendation (deterministic — verify against your own read o
 ...and the same commit on a clean feature branch just exits 0 with no output.
 
 </details>
+
+### Codex CLI (`AGENTS.md`)
+
+```sh
+kodemux codex install            # writes/updates ./AGENTS.md
+kodemux codex install --global   # or ~/.codex/AGENTS.md, for every project
+```
+
+Codex has no prompt-submit hook to register, so the integration point is
+`AGENTS.md` — the file Codex reads into context at the start of every session.
+`codex install` appends a marker-delimited block telling the agent to run
+`kodemux route "<task>" --provider codex` before non-trivial work and
+`kodemux guard` + `kodemux scan` before committing.
+
+The honest difference: **Claude Code hooks are enforced, the Codex block is
+advisory.** A hook can return exit 2 and stop a `git commit` outright; an
+`AGENTS.md` instruction is something the agent chooses to follow. If you want
+hard enforcement under Codex, add the same two commands to a git `pre-commit`
+hook (above) — that binds regardless of which agent produced the change:
+
+```sh
+# .git/hooks/pre-commit — enforced for every agent and every human
+kodemux guard || exit 1
+kodemux scan  || exit 1
+```
+
+Installing is additive and idempotent: existing `AGENTS.md` content is preserved,
+a `.bak` backup is written, and re-running rewrites the kodemux block in place
+rather than appending a second copy.
 
 ---
 
